@@ -1,0 +1,1531 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Teste de Controles</title>
+<style>
+:root{
+  --bg:#0f1115; --panel:#171a21; --panel2:#1f232c; --line:#2b303b; --text:#e8eaf0; --muted:#8b93a7;
+  --accent:#4f8cff; --ok:#22c55e; --warn:#f59e0b; --bad:#ef4444; --na:#64748b;
+  --key:#262b36; --keystroke:#3a4150; --body:#1b1f27;
+}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--text);font:15px/1.45 system-ui,"Segoe UI",Roboto,sans-serif}
+header{display:flex;align-items:center;gap:16px;padding:10px 20px;border-bottom:1px solid var(--line);background:var(--panel)}
+.brand{font-weight:700;display:flex;gap:8px;align-items:center;white-space:nowrap}
+.brand svg{width:24px;height:24px;color:var(--accent)}
+nav{display:flex;gap:4px}
+nav button{background:none;border:0;color:var(--muted);padding:8px 12px;border-radius:8px;cursor:pointer;font:inherit}
+nav button.active{background:var(--panel2);color:var(--text)}
+nav button:disabled{opacity:.4;cursor:default}
+.op{margin-left:auto;display:flex;align-items:center;gap:8px;color:var(--muted);font-size:13px}
+.op input{width:160px}
+input,select{background:var(--panel2);border:1px solid var(--line);color:var(--text);border-radius:8px;padding:8px 10px;font:inherit}
+input:focus,select:focus{outline:2px solid var(--accent);border-color:transparent}
+main{padding:18px 20px;max-width:1320px;margin:0 auto}
+.grid{display:grid;grid-template-columns:minmax(0,1.2fr) minmax(0,1fr);gap:16px;align-items:start}
+@media (max-width:960px){.grid,.rgrid{grid-template-columns:1fr!important}}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:22px}
+#stage{min-height:470px;display:flex;flex-direction:column}
+h2{margin:0 0 6px;font-size:24px}
+h3{margin:0 0 10px;font-size:13px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.06em}
+.lead{color:var(--muted);margin:0 0 14px;font-size:15px}
+.lead b{color:var(--text)}
+.actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:auto;padding-top:18px}
+.btn{background:var(--panel2);color:var(--text);border:1px solid var(--line);border-radius:10px;padding:10px 16px;font:inherit;font-weight:600;cursor:pointer}
+.btn:hover{border-color:var(--muted)}
+.btn:disabled{opacity:.45;cursor:default}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+.btn.sm{padding:4px 10px;font-size:13px}
+.btn.sel-ok{background:rgba(34,197,94,.2);border-color:var(--ok)}
+.btn.sel-bad{background:rgba(239,68,68,.2);border-color:var(--bad)}
+kbd{font:11px ui-monospace,Consolas,monospace;padding:1px 6px;border-radius:5px;border:1px solid currentColor;opacity:.75;margin-left:6px}
+.hint{min-height:22px;color:var(--warn);font-weight:600;margin:8px 0}
+.field{display:flex;flex-direction:column;gap:6px;margin:6px 0 4px}
+.field span{font-size:13px;color:var(--muted)}
+.field input{font-size:20px;padding:12px 14px}
+.plan{color:var(--muted);font-size:13px;columns:2;padding-left:18px;margin:10px 0 0}
+canvas{max-width:100%;height:auto;display:block;margin:0 auto}
+/* sessão */
+.thead{display:flex;justify-content:space-between;align-items:flex-start;gap:12px}
+.timer{font:700 26px ui-monospace,Consolas,monospace;color:var(--muted)}
+.idtag{display:inline-block;font-size:12px;font-weight:700;padding:2px 8px;border-radius:6px;background:var(--panel2);margin-left:8px;vertical-align:middle;color:var(--text)}
+.sec{margin-top:16px;padding-top:14px;border-top:1px solid var(--line)}
+.sec h3 span{color:var(--text);text-transform:none;letter-spacing:0;margin-left:6px}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.mini{font-size:12px;color:var(--muted);text-align:center;margin:4px 0 0}
+.trow{display:grid;grid-template-columns:64px 1fr 170px;gap:10px;align-items:center;margin:6px 0}
+.trow .mini{text-align:left;margin:0}
+.tbar{position:relative;height:16px;background:var(--panel2);border-radius:8px;overflow:hidden}
+.tbar>i{position:absolute;left:0;top:0;bottom:0;width:0;background:var(--accent)}
+.tbar>b{position:absolute;top:0;bottom:0;width:3px;background:var(--warn);left:0}
+.vrow{display:flex;gap:8px;align-items:center;margin:6px 0;flex-wrap:wrap}
+.vrow>span{width:120px}
+.sens{display:grid;grid-template-columns:1fr 200px;gap:16px;align-items:center}
+.meter{margin:4px 0 10px}
+.meter span{font-size:12px;color:var(--muted)}
+.bar{height:10px;background:var(--panel2);border-radius:99px;overflow:hidden}
+.bar>i{display:block;height:100%;width:0;background:var(--accent)}
+.bar>i.full{background:var(--ok)}
+/* controle */
+.live svg{width:100%;height:auto;display:block}
+.k{fill:var(--key);stroke:var(--keystroke);stroke-width:2;transition:fill .06s}
+.k.face{stroke:var(--c)}
+.k.done{fill:rgba(34,197,94,.25);stroke:rgba(34,197,94,.75)}
+.k.part{fill:rgba(79,140,255,.18)}
+.k.bad{fill:rgba(245,158,11,.3);stroke:var(--warn)}
+.k.on{fill:var(--accent)}
+.kl{fill:var(--text);font-size:13px;font-weight:700;text-anchor:middle;dominant-baseline:central;pointer-events:none}
+.kl.sm{font-size:10px;fill:var(--muted);font-weight:600}
+.body{fill:var(--body);stroke:var(--line);stroke-width:2}
+.tf{fill:var(--accent);opacity:.65;pointer-events:none}
+.stk{fill:#4b5363;pointer-events:none}
+.ro{display:grid;grid-template-columns:repeat(6,1fr);gap:6px;margin-top:10px}
+.ro div{background:var(--panel2);border-radius:8px;padding:6px 8px;text-align:center}
+.ro span{display:block;font-size:11px;color:var(--muted)}
+.ro b{font:600 13px ui-monospace,Consolas,monospace}
+.info{display:grid;grid-template-columns:auto 1fr;gap:6px 14px;margin:14px 0 0;font-size:14px}
+.info dt{color:var(--muted)}
+.info dd{margin:0}
+.t-bad{color:var(--bad);font-weight:600}
+.feed{margin-top:14px;font-size:13px}
+.feed:empty{display:none}
+.feed div{padding:4px 0;border-bottom:1px solid var(--line);color:var(--muted)}
+.feed div span{font-family:ui-monospace,Consolas,monospace;margin-right:8px;opacity:.7}
+.feed div.bad{color:#fcd34d}
+.overlay{position:fixed;inset:0;background:rgba(0,0,0,.7);display:flex;align-items:center;justify-content:center;z-index:10;padding:16px}
+.overlay[hidden]{display:none}
+.overlay .panel{max-width:520px;width:100%}
+#pause .panel{text-align:center;border-color:var(--warn)}
+.calrow{display:flex;gap:10px;align-items:center;margin-top:12px;flex-wrap:wrap}
+.calrow .mini{text-align:left;margin:0}
+.cmp{width:100%;border-collapse:collapse;margin:8px 0 4px}
+.cmp th,.cmp td{padding:6px 8px;border-bottom:1px solid var(--line);text-align:left}
+.cmp th{color:var(--muted);font-size:13px;font-weight:600}
+.cmp td.good{color:var(--ok);font-weight:700}
+.cmp td.bad{color:var(--warn);font-weight:700}
+.spin{display:inline-block;width:16px;height:16px;border:2px solid var(--line);border-top-color:var(--accent);border-radius:50%;animation:rot .8s linear infinite;vertical-align:-3px;margin-right:8px}
+@keyframes rot{to{transform:rotate(360deg)}}
+/* bancada de bateria */
+.bench{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:16px;margin:16px 0}
+.bcard .bhead{display:flex;gap:8px;align-items:center;margin-bottom:10px}
+.bcard .bhead input{flex:1;min-width:0;padding:6px 8px;font-size:14px}
+.bbig{font:700 40px ui-monospace,Consolas,monospace;margin:4px 0}
+.bstat{display:grid;grid-template-columns:auto 1fr;gap:4px 12px;font-size:14px;margin:10px 0}
+.bstat dt{color:var(--muted)}
+.bstat dd{margin:0;font-weight:600}
+.bmsg{font-size:13px;min-height:20px;color:var(--muted)}
+.bmsg.bad{color:var(--warn);font-weight:600}
+.bverd{font-weight:800;font-size:18px}
+.bverd.ok{color:var(--ok)} .bverd.warn{color:var(--warn)} .bverd.fail{color:var(--bad)}
+.refs{display:flex;gap:14px;flex-wrap:wrap;align-items:center;color:var(--muted);font-size:13px}
+.refs input{width:80px;padding:6px 8px}
+.misslist{margin:0 0 6px;padding-left:18px}
+.misslist li{margin:4px 0}
+/* chips / pills */
+.bgrid{display:flex;flex-wrap:wrap;gap:6px}
+.bchip{padding:6px 10px;border-radius:8px;font-weight:600;border:1px solid var(--line);min-width:46px;text-align:center;font-size:14px;color:var(--muted)}
+.bchip small{margin-left:6px;font-weight:700;opacity:.8}
+.bchip.part{border-color:var(--accent);color:var(--text)}
+.bchip.ok{border-color:rgba(34,197,94,.5);color:var(--ok);background:rgba(34,197,94,.08)}
+.bchip.warn{border-color:var(--warn);color:var(--warn);background:rgba(245,158,11,.1)}
+.bchip.fail{border-color:var(--bad);color:#fca5a5;background:rgba(239,68,68,.15)}
+.bchip.miss{border-style:dashed;color:#93c5fd}
+.bchip.na{color:var(--na)}
+.pill{display:inline-block;font-size:11px;font-weight:700;text-transform:uppercase;padding:2px 8px;border-radius:99px;margin-right:8px;white-space:nowrap}
+.pill.ok{background:rgba(34,197,94,.16);color:#86efac}
+.pill.warn{background:rgba(245,158,11,.18);color:#fcd34d}
+.pill.fail{background:rgba(239,68,68,.18);color:#fca5a5}
+.pill.miss{background:rgba(79,140,255,.18);color:#93c5fd}
+.pill.na{background:rgba(100,116,139,.2);color:#cbd5e1}
+/* laudo */
+.rhead{border-radius:14px;padding:20px 24px;margin-bottom:16px;border:1px solid}
+.rhead.ok{background:rgba(34,197,94,.1);border-color:rgba(34,197,94,.45)}
+.rhead.warn{background:rgba(245,158,11,.1);border-color:rgba(245,158,11,.45)}
+.rhead.fail{background:rgba(239,68,68,.1);border-color:rgba(239,68,68,.5)}
+.rhead.miss{background:rgba(79,140,255,.1);border-color:rgba(79,140,255,.5)}
+.verdict{font-size:30px;font-weight:800}
+.rhead.ok .verdict{color:var(--ok)} .rhead.warn .verdict{color:var(--warn)} .rhead.fail .verdict{color:var(--bad)} .rhead.miss .verdict{color:#93c5fd}
+.rmeta{color:var(--muted);margin-top:4px}
+.rmeta b{color:var(--text)}
+.rgrid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px}
+.probs{list-style:none;padding:0;margin:0;display:grid;gap:8px}
+.probs li{background:var(--panel2);border-radius:8px;padding:9px 12px}
+.none{color:var(--ok);font-weight:600;margin:0}
+.tbl{width:100%;border-collapse:collapse}
+.tbl th,.tbl td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--line);vertical-align:top}
+.tbl th{color:var(--muted);font-weight:600;font-size:13px}
+.tbl tr.grp td{color:var(--muted);font-size:12px;text-transform:uppercase;letter-spacing:.06em;padding-top:16px}
+.tbl tr.click{cursor:pointer}
+.tbl tr.click:hover{background:var(--panel2)}
+.tbl .empty{color:var(--muted);text-align:center;padding:30px}
+.probcell{color:var(--muted);font-size:13px;max-width:380px}
+.hbar{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:14px}
+.hbar input{flex:1;min-width:220px}
+.stats{color:var(--muted);font-size:14px;margin:0 0 12px}
+.stats b{color:var(--text)}
+@media print{
+  :root{--bg:#fff;--panel:#fff;--panel2:#f3f4f6;--line:#d1d5db;--text:#111;--muted:#555}
+  header,.noprint,#view-test,#view-history,.overlay{display:none!important}
+  main{padding:0}
+  .pill.ok,.bchip.ok{color:#15803d} .pill.warn,.bchip.warn{color:#b45309} .pill.fail,.bchip.fail{color:#b91c1c} .pill.miss,.bchip.miss{color:#1d4ed8}
+}
+</style>
+</head>
+<body>
+<header>
+  <div class="brand"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 11h4M8 9v4M15 12h.01M18 10h.01"/><path d="M17.3 5H6.7a4 4 0 0 0-4 3.6l-.7 6.6A3 3 0 0 0 5 18.5c1 0 1.9-.5 2.4-1.3L8.5 15h7l1.1 2.2c.5.8 1.4 1.3 2.4 1.3a3 3 0 0 0 3-3.3l-.7-6.6a4 4 0 0 0-4-3.6Z"/></svg>Teste de Controles</div>
+  <nav><button data-view="test" class="active">Teste</button><button data-view="bench">Bateria</button><button data-view="history">Histórico</button></nav>
+  <label class="op">Operador <input id="op" placeholder="Seu nome" autocomplete="off"></label>
+</header>
+<main>
+  <section id="view-test">
+    <div class="grid">
+      <div class="panel" id="stage"></div>
+      <div class="panel live">
+        <div id="pad"></div>
+        <div class="ro">
+          <div><span>LX</span><b id="rLX">—</b></div><div><span>LY</span><b id="rLY">—</b></div>
+          <div><span>RX</span><b id="rRX">—</b></div><div><span>RY</span><b id="rRY">—</b></div>
+          <div><span id="rLTn">LT</span><b id="rLT">—</b></div><div><span id="rRTn">RT</span><b id="rRT">—</b></div>
+        </div>
+        <dl class="info">
+          <dt>Modelo</dt><dd id="iModel">—</dd>
+          <dt>Conexão</dt><dd id="iConn">—</dd>
+          <dt>Bateria</dt><dd id="iBatt">—</dd>
+          <dt>Sensores</dt><dd id="iHid">—</dd>
+        </dl>
+        <div class="feed" id="feed"></div>
+      </div>
+    </div>
+  </section>
+  <section id="view-report" hidden></section>
+  <section id="view-bench" hidden>
+    <div class="panel">
+      <h2>Bancada de bateria</h2>
+      <p class="lead">Mede a autonomia de vários controles <b>PS4 / PS5</b> ao mesmo tempo, com <b>vibração e luz no máximo</b> para acelerar o consumo, e compara com um controle de referência.</p>
+      <ul class="plan">
+        <li>Conecte os controles por <b>Bluetooth</b> — no cabo eles carregam e a medição não vale.</li>
+        <li>Deixe-os numa superfície macia: eles vão vibrar o tempo todo.</li>
+        <li>O resultado sai depois de <b>2 quedas de 10%</b> (cerca de 30–60 min).</li>
+        <li>Mantenha esta aba aberta; o PC não suspende enquanto a bancada roda.</li>
+      </ul>
+      <div class="actions" style="margin-top:14px;padding-top:0">
+        <button class="btn primary" id="badd">Adicionar controle</button>
+        <button class="btn" id="bstartall">Iniciar todos</button>
+        <button class="btn" id="bstopall">Parar todos</button>
+      </div>
+      <div class="refs" style="margin-top:14px">
+        <span>Autonomia de referência (controle bom, nesta bancada):</span>
+        <label>DualSense <input id="ref-ds5" type="number" min="0" step="0.1" placeholder="—"> h</label>
+        <label>DualShock 4 <input id="ref-ds4" type="number" min="0" step="0.1" placeholder="—"> h</label>
+      </div>
+    </div>
+    <div class="bench" id="bcards"></div>
+    <div class="panel">
+      <div class="thead"><h3>Resultados salvos</h3><button class="btn sm" id="bcsv">Exportar CSV</button></div>
+      <table class="tbl">
+        <thead><tr><th>Data</th><th>ID</th><th>Modelo</th><th>Consumo</th><th>Autonomia (carga máx.)</th><th>Saúde</th><th>Resultado</th></tr></thead>
+        <tbody id="bres"></tbody>
+      </table>
+    </div>
+  </section>
+  <section id="view-history" hidden>
+    <div class="hbar noprint">
+      <input id="hq" placeholder="Buscar por ID, modelo, operador ou defeito…">
+      <select id="hf"><option value="">Todos</option><option>APROVADO</option><option>APROVADO COM RESSALVAS</option><option>INCOMPLETO</option><option>REPROVADO</option></select>
+      <button class="btn" id="hcsv">Exportar CSV</button>
+      <button class="btn" id="hclr">Limpar</button>
+    </div>
+    <p class="stats" id="hstats"></p>
+    <div class="panel"><table class="tbl">
+      <thead><tr><th>Data</th><th>ID</th><th>Modelo</th><th>Operador</th><th>Resultado</th><th>Bateria</th><th>Problemas / pendências</th></tr></thead>
+      <tbody id="hbody"></tbody>
+    </table></div>
+  </section>
+</main>
+<div id="pause" class="overlay" hidden><div class="panel"><h2>Controle desconectado</h2><p class="lead">Reconecte e aperte qualquer botão para continuar — o que já foi registrado está mantido.<br><kbd>Esc</kbd> cancela o teste.</p></div></div>
+<div id="confirm" class="overlay" hidden><div class="panel" id="confirmBox"></div></div>
+<div id="calib" class="overlay" hidden><div class="panel" id="calibBox"></div></div>
+
+<script>
+// ---------- Configuração (limites de aprovação) ----------
+const CFG = {
+  minPresses: 2,                                       // acionamentos mínimos para o botão contar como testado
+  restWin: 24, restStd: 0.025,                         // repouso do analógico: ~400 ms com leitura estável
+  noiseWarn: 0.012, retMinMs: 600,
+  drift: {warn: 0.05, fail: 0.10},                     // desvio do centro com o analógico solto
+  ret: {warn: 0.07, fail: 0.12},                       // pior desvio depois de levar até a borda e soltar
+  reach: {warn: 0.92, fail: 0.80},                     // alcance mínimo em qualquer direção
+  sectors: 24, sectorOk: 0.90, sectorTouched: 0.3,
+  chatterGapMs: 35, chatterPressMs: 12, chatterFail: 3,// falso contato (bounce)
+  longHoldMs: 5000, crossMin: 2, crossRatio: 0.5,
+  trigRest: 0.05, trigMax: {warn: 0.95, fail: 0.85}, trigLevels: 6,
+  gyroRange: 2500, accelRange: 2500, moveSeen: 400,
+  battLow: 20,
+};
+
+const SONY = 0x054c;
+const SONY_PIDS = [0x05c4, 0x09cc, 0x0ba0, 0x0ce6, 0x0df2];   // DS4 v1, DS4 v2, adaptador DS4, DualSense, DualSense Edge
+const LABELS = {
+  xbox: ['A','B','X','Y','LB','RB','LT','RT','View','Menu','LS (clique)','RS (clique)','D-pad ↑','D-pad ↓','D-pad ←','D-pad →','Xbox'],
+  ps: ['✕','○','□','△','L1','R1','L2','R2','Share','Options','L3','R3','D-pad ↑','D-pad ↓','D-pad ←','D-pad →','PS','Touchpad'],
+  generic: ['B1','B2','B3','B4','L1','R1','L2','R2','Select','Start','L3','R3','D-pad ↑','D-pad ↓','D-pad ←','D-pad →','Home'],
+};
+const ORDER = [0,1,2,3,12,15,13,14,4,5,8,9,10,11,16,17];
+const BATT_ERR = {0xa: 'voltagem anormal', 0xb: 'temperatura anormal', 0xf: 'erro de carga'};
+const ICON = {ok: '✓', warn: '!', fail: '✕', na: '–', miss: '?'};
+const STLABEL = {ok: 'OK', warn: 'Atenção', fail: 'Falha', na: 'N/D', miss: 'Não testado'};
+const RANK = {ok: 0, na: 0, miss: 1, warn: 2, fail: 3};
+const MOTORS = [['forte', 'Motor forte', 1, 0], ['fraco', 'Motor fraco', 0, 1]];
+
+const S = {
+  view: 'test', mode: 'idle', paused: false, confirm: false, T: null, lastRec: null,
+  padIndex: null, padId: null, fam: 'generic', model: '', mapping: 'standard',
+  prev: [], lastUp: [],
+  hid: null, hidKind: null, hidConn: null, hidFeat: false,
+  hs: {btn: new Set(), dn: [], up: [], gyro: [0,0,0], accel: [0,0,0], touch: {on: false, x: 0, y: 0}, batt: null, t: 0},
+};
+const PAD = {k: [], tr: {}, st: []};
+
+// ---------- utilidades ----------
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const pct = v => Math.round(v * 100) + '%';
+const f3 = v => v == null || isNaN(v) ? '—' : v.toFixed(3).replace('.', ',');
+const mmss = ms => { const s = Math.floor(ms / 1000); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; };
+const median = a => { if (!a.length) return 0; const b = [...a].sort((x, y) => x - y); return b[b.length >> 1]; };
+const fmtDate = ts => new Date(ts).toLocaleString('pt-BR', {dateStyle: 'short', timeStyle: 'short'});
+const store = {
+  get(k, d) { try { const v = localStorage.getItem(k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
+  set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} },
+};
+const lab = (i, fam) => (LABELS[fam || (S.T ? S.T.fam : S.fam)] || LABELS.generic)[i] ?? `Botão ${i}`;
+const stage = html => { $('#stage').innerHTML = html; };
+const hint = t => { const h = $('#hint'); if (h) h.textContent = t; };
+const grade = (v, t) => v > t.fail ? 'fail' : v > t.warn ? 'warn' : 'ok';
+const gradeLow = (v, t) => v < t.fail ? 'fail' : v < t.warn ? 'warn' : 'ok';
+const worse = (a, b) => RANK[b] > RANK[a] ? b : a;
+let COL = {};
+function readColors() { const cs = getComputedStyle(document.documentElement); ['--ok','--warn','--line','--accent','--panel2','--muted'].forEach(v => COL[v] = cs.getPropertyValue(v).trim()); }
+
+let AC = null;
+function initAudio() { try { AC = AC || new AudioContext(); if (AC.state === 'suspended') AC.resume(); } catch (e) {} }
+function beep(ok = true, freq) {
+  if (!AC) return;
+  try {
+    const o = AC.createOscillator(), g = AC.createGain(), t = AC.currentTime;
+    o.type = ok ? 'sine' : 'square'; o.frequency.value = freq || (ok ? 880 : 200);
+    g.gain.setValueAtTime(ok ? 0.08 : 0.05, t); g.gain.exponentialRampToValueAtTime(0.0001, t + (ok ? 0.12 : 0.35));
+    o.connect(g).connect(AC.destination); o.start(t); o.stop(t + 0.4);
+  } catch (e) {}
+}
+function secName(k) {
+  const a = (k + 0.5) / CFG.sectors * 2 * Math.PI - Math.PI;
+  const deg = ((-a * 180 / Math.PI) % 360 + 360) % 360;
+  return ['direita','cima-direita','cima','cima-esquerda','esquerda','baixo-esquerda','baixo','baixo-direita'][Math.round(deg / 45) % 8];
+}
+
+// ---------- detecção do controle ----------
+function detect(id) {
+  const s = id.toLowerCase();
+  const vid = (s.match(/vendor:\s*([0-9a-f]{4})/) || [])[1], pid = (s.match(/product:\s*([0-9a-f]{4})/) || [])[1];
+  if (vid === '054c' || /dualsense|dualshock|wireless controller/.test(s)) {
+    if (pid === '0df2' || /edge/.test(s)) return {fam: 'ps', model: 'DualSense Edge (PS5)'};
+    if (pid === '0ce6' || /dualsense/.test(s)) return {fam: 'ps', model: 'DualSense (PS5)'};
+    if (['05c4','09cc','0ba0'].includes(pid)) return {fam: 'ps', model: 'DualShock 4 (PS4)'};
+    if (pid === '0268' || /playstation\(r\)3|dualshock ?3|sixaxis/.test(s)) return {fam: 'ps', model: 'DualShock 3 (PS3)', ps3: true};
+    return {fam: 'ps', model: 'Controle PlayStation'};
+  }
+  if (vid === '045e' || /xinput|xbox/.test(s)) return {fam: 'xbox', model: 'Controle Xbox'};
+  return {fam: 'generic', model: 'Controle genérico'};
+}
+
+// ---------- desenho do controle ----------
+function buildPad(fam) {
+  const ps = fam === 'ps';
+  const P = ps ? {dp: [178,162], ls: [240,222], rs: [360,222], fc: [422,162], se: [234,104], st: [366,104], hm: [300,226]}
+               : {ls: [178,162], dp: [240,222], rs: [360,222], fc: [422,162], se: [268,150], st: [332,150], hm: [300,108]};
+  const F = ps ? [['✕','#7aa2ff'],['○','#ff7a7a'],['□','#f08ad0'],['△','#4fd1a5']]
+       : fam === 'xbox' ? [['A','#4ade80'],['B','#f87171'],['X','#60a5fa'],['Y','#facc15']]
+       : [['1','#cbd5e1'],['2','#cbd5e1'],['3','#cbd5e1'],['4','#cbd5e1']];
+  const sm = ps ? ['Share','Options','PS'] : fam === 'xbox' ? ['View','Menu','X'] : ['Select','Start','H'];
+  const tl = ps ? ['L1','R1','L2','R2'] : fam === 'xbox' ? ['LB','RB','LT','RT'] : ['L1','R1','L2','R2'];
+  let s = `<svg viewBox="0 0 600 380" role="img" aria-label="Controle">`;
+  [[6,112,tl[2]],[7,392,tl[3]]].forEach(([i,x,t]) => {
+    s += `<rect id="b${i}" class="k" x="${x}" y="18" width="96" height="32" rx="10"/><rect id="tr${i}" class="tf" x="${x}" y="18" width="0" height="32" rx="10"/><text class="kl" x="${x+48}" y="34">${t}</text>`;
+  });
+  [[4,112,tl[0]],[5,392,tl[1]]].forEach(([i,x,t]) => {
+    s += `<rect id="b${i}" class="k" x="${x}" y="60" width="96" height="20" rx="10"/><text class="kl" x="${x+48}" y="70">${t}</text>`;
+  });
+  s += `<path class="body" d="M160 88 C120 88 92 104 78 140 L30 286 C16 334 46 372 92 362 C122 355 140 326 164 296 L204 262 L396 262 L436 296 C460 326 478 355 508 362 C554 372 584 334 570 286 L522 140 C508 104 480 88 440 88 Z"/>`;
+  if (ps) s += `<rect id="b17" class="k" x="256" y="94" width="88" height="58" rx="8"/>`;
+  const [dx, dy] = P.dp;
+  [[12,0,-1],[13,0,1],[14,-1,0],[15,1,0]].forEach(([i,ox,oy]) => {
+    s += `<rect id="b${i}" class="k" x="${dx+ox*24-11}" y="${dy+oy*24-11}" width="22" height="22" rx="4"/>`;
+  });
+  [[10,P.ls,0],[11,P.rs,1]].forEach(([i,[x,y],n]) => {
+    s += `<circle id="b${i}" class="k" cx="${x}" cy="${y}" r="32"/><circle id="st${n}" class="stk" cx="${x}" cy="${y}" r="15"/>`;
+  });
+  const [fx, fy] = P.fc;
+  [[0,0,1],[1,1,0],[2,-1,0],[3,0,-1]].forEach(([i,ox,oy]) => {
+    const [t, c] = F[i], x = fx + ox * 30, y = fy + oy * 30;
+    s += `<circle id="b${i}" class="k face" style="--c:${c}" cx="${x}" cy="${y}" r="15"/><text class="kl" x="${x}" y="${y}" style="fill:${c}">${t}</text>`;
+  });
+  [[8,P.se,sm[0]],[9,P.st,sm[1]]].forEach(([i,[x,y],t]) => {
+    s += `<rect id="b${i}" class="k" x="${x-12}" y="${y-7}" width="24" height="14" rx="7"/><text class="kl sm" x="${x}" y="${y+18}">${t}</text>`;
+  });
+  s += `<circle id="b16" class="k" cx="${P.hm[0]}" cy="${P.hm[1]}" r="13"/><text class="kl sm" x="${P.hm[0]}" y="${P.hm[1]}">${sm[2]}</text>`;
+  $('#pad').innerHTML = s + '</svg>';
+  PAD.k = Array.from({length: 18}, (_, i) => document.getElementById('b' + i));
+  PAD.tr = {6: $('#tr6'), 7: $('#tr7')};
+  PAD.st = [$('#st0'), $('#st1')];
+  $('#rLTn').textContent = tl[2]; $('#rRTn').textContent = tl[3];
+}
+function padReset() { document.querySelectorAll('#pad .k').forEach(e => e.classList.remove('done', 'part', 'bad')); }
+function padState(i, st) {
+  const el = PAD.k[i]; if (!el) return;
+  el.classList.toggle('done', st === 'ok'); el.classList.toggle('part', st === 'part'); el.classList.toggle('bad', st === 'warn' || st === 'fail');
+}
+
+const RO = {};
+function drawLive(gp, pressed) {
+  for (let i = 0; i < PAD.k.length; i++) PAD.k[i]?.classList.toggle('on', !!pressed[i]);
+  for (const i of [6, 7]) PAD.tr[i]?.setAttribute('width', 96 * (gp.buttons[i]?.value || 0));
+  const a = gp.axes;
+  PAD.st[0]?.setAttribute('transform', `translate(${(a[0] || 0) * 16} ${(a[1] || 0) * 16})`);
+  PAD.st[1]?.setAttribute('transform', `translate(${(a[2] || 0) * 16} ${(a[3] || 0) * 16})`);
+  const f = v => ((v || 0) >= 0 ? '+' : '') + (v || 0).toFixed(3);
+  RO.LX.textContent = f(a[0]); RO.LY.textContent = f(a[1]); RO.RX.textContent = f(a[2]); RO.RY.textContent = f(a[3]);
+  RO.LT.textContent = pct(gp.buttons[6]?.value || 0); RO.RT.textContent = pct(gp.buttons[7]?.value || 0);
+}
+
+function updateInfo() {
+  const has = S.padIndex != null;
+  $('#iModel').textContent = has ? S.model : '—';
+  $('#iConn').textContent = S.hid && S.hidConn ? (S.hidConn === 'usb' ? 'USB' : 'Bluetooth') : has ? 'Conectado' : '—';
+  const b = S.hs.batt;
+  $('#iBatt').innerHTML = S.hid && b
+    ? `${b.pct}%${b.charging ? ' · carregando' : ''}${b.full ? ' · carga completa' : ''}${b.err ? ` · <span class="t-bad">${b.err}</span>` : ''}`
+    : has && S.fam === 'xbox' ? 'não informado pelo navegador (Xbox)' : '—';
+  let h = '—';
+  if (has && S.fam === 'ps') {
+    if (S.ps3) h = 'não disponíveis no DualShock 3';
+    else if (!('hid' in navigator)) h = 'indisponível (use Chrome ou Edge)';
+    else if (S.hid) h = 'conectados (bateria, giroscópio, touchpad)';
+    else h = '<button class="btn sm" id="hidbtn">Conectar sensores</button>';
+  }
+  if (h !== S._hidHtml) {
+    S._hidHtml = h; $('#iHid').innerHTML = h;
+    const bt = $('#hidbtn'); if (bt) bt.onclick = () => hidRequest();
+  }
+}
+
+// ---------- seleção do controle ----------
+const newest = pads => pads.length ? pads.reduce((a, b) => b.timestamp > a.timestamp ? b : a) : null;
+const currentPad = () => S.padIndex == null ? null : navigator.getGamepads()[S.padIndex];
+function pickPad() {
+  const pads = [...navigator.getGamepads()].filter(p => p && p.connected);
+  let gp;
+  if (S.mode === 'test') gp = pads.find(p => p.index === S.padIndex) || (S.padIndex == null ? newest(pads) : null);
+  else gp = newest(pads);
+  if (!gp) { if (S.padIndex != null) padLost(); return null; }
+  if (gp.index !== S.padIndex || gp.id !== S.padId) padChanged(gp);
+  return gp;
+}
+function padChanged(gp) {
+  S.padIndex = gp.index; S.padId = gp.id;
+  S.prev = gp.buttons.map(b => b.pressed || b.value > 0.5); S.lastUp = [];
+  if (S.mode === 'test') {
+    if (S.paused) { S.paused = false; $('#pause').hidden = true; logEv('Controle reconectado'); }
+    return;
+  }
+  const d = detect(gp.id);
+  S.fam = d.fam; S.model = d.model; S.mapping = gp.mapping; S.ps3 = !!d.ps3;
+  buildPad(S.fam); refreshStart();
+  if (S.fam === 'ps' && !S.ps3) hidAuto();
+}
+function padLost() {
+  S.padIndex = null; S.padId = null;
+  if (S.mode === 'test') {
+    if (!S.paused) {
+      S.paused = true; S.T.disconnects++; S.T.discAt = S.hidConn === 'bt' ? performance.now() : null;
+      logEv('Controle desconectado', true); $('#pause').hidden = false; beep(false);
+    }
+  } else refreshStart();
+}
+
+// ---------- WebHID (PlayStation: bateria, sensores, falso contato em alta frequência) ----------
+async function hidAuto() {
+  if (!('hid' in navigator) || S.hid) return;
+  try { const d = (await navigator.hid.getDevices()).find(d => d.vendorId === SONY && SONY_PIDS.includes(d.productId)); if (d) await hidOpen(d); } catch (e) {}
+}
+async function hidRequest() {
+  if (!('hid' in navigator)) return;
+  try { const [d] = await navigator.hid.requestDevice({filters: SONY_PIDS.map(productId => ({vendorId: SONY, productId}))}); if (d) await hidOpen(d); }
+  catch (e) { console.warn(e); }
+}
+async function hidOpen(d) {
+  if (!d.opened) await d.open();
+  if (S.hid && S.hid !== d) { try { S.hid.oninputreport = null; await S.hid.close(); } catch (e) {} }
+  S.hid = d; S.hidKind = hidKindOf(d); S.hidPid = d.productId;
+  S.hidConn = null; S.hidFeat = false; S.hs.btn = new Set(); S.hs.batt = null;
+  d.oninputreport = onHid;
+  refreshStart();
+}
+if ('hid' in navigator) {
+  navigator.hid.addEventListener('disconnect', e => {
+    if (e.device === S.hid) { S.hid = null; S.hidConn = null; S.hs.batt = null; refreshStart(); }
+    benchLost(e.device);
+  });
+  navigator.hid.addEventListener('connect', e => { if (e.device.vendorId === SONY && SONY_PIDS.includes(e.device.productId) && !S.hid && !S.ps3) hidOpen(e.device).catch(() => {}); });
+}
+const HID_OFF = {ds5: {b: 7, g: 15, a: 21, t: 32, bat: 52}, ds4: {b: 4, g: 12, a: 18, t: 34, bat: 29}};
+const hidKindOf = d => [0x0ce6, 0x0df2].includes(d.productId) ? 'ds5' : 'ds4';
+// Bluetooth começa no relatório simplificado; ler o feature report de calibração ativa o relatório completo
+const fullModeReport = k => k === 'ds5' ? 0x05 : 0x02;
+function hidLayout(k, id, len) {
+  if (k === 'ds5') { if (id === 0x01 && len >= 63) return {o: 0, conn: 'usb'}; if (id === 0x31) return {o: 1, conn: 'bt'}; }
+  else { if (id === 0x01 && len >= 63) return {o: 0, conn: 'usb'}; if (id === 0x11) return {o: 2, conn: 'bt'}; }
+  return null;
+}
+function readBatt(k, d, o) {
+  const bv = d.getUint8(HID_OFF[k].bat + o), lv = bv & 0x0f;
+  if (k === 'ds5') {
+    const st = bv >> 4;
+    return {lv, pct: Math.min(100, lv * 10 + 5), charging: st === 1, full: st === 2, power: st === 1 || st === 2, err: BATT_ERR[st] || null};
+  }
+  const cable = !!(bv & 0x10);
+  return {lv, pct: cable ? Math.min(100, Math.round(lv * 100 / 11)) : Math.min(100, lv * 10 + 5), charging: cable && lv < 11, full: cable && lv >= 11, power: cable, err: null};
+}
+function onHid(e) {
+  const d = e.data, k = S.hidKind, lay = hidLayout(k, e.reportId, d.byteLength);
+  if (!lay) {
+    if (!S.hidFeat) { S.hidFeat = true; S.hid.receiveFeatureReport(fullModeReport(k)).catch(() => {}); }
+    return;
+  }
+  const {o, conn} = lay;
+  // ao plugar o cabo no PC o controle troca de Bluetooth para USB: não contar como queda de conexão
+  if (S.T && S.T.discAt && conn === 'usb' && performance.now() - S.T.discAt < 20000) {
+    S.T.disconnects = Math.max(0, S.T.disconnects - 1); S.T.discAt = null; logEv('Trocou para o cabo USB');
+  }
+  S.hidConn = conn;
+  const L = HID_OFF[k];
+  const u = i => d.getUint8(i + o), s16 = i => d.getInt16(i + o, true);
+  const hs = S.hs, now = e.timeStamp || performance.now();
+  hs.t = performance.now();
+  hs.gyro = [s16(L.g), s16(L.g + 2), s16(L.g + 4)];
+  hs.accel = [s16(L.a), s16(L.a + 2), s16(L.a + 4)];
+  hs.touch = {on: !(u(L.t) & 0x80), x: u(L.t + 1) | ((u(L.t + 2) & 0x0f) << 8), y: (u(L.t + 2) >> 4) | (u(L.t + 3) << 4)};
+  hs.batt = readBatt(k, d, o);
+  const b0 = u(L.b), b1 = u(L.b + 1), b2 = u(L.b + 2), hat = b0 & 0x0f, cur = new Set();
+  if ([0,1,7].includes(hat)) cur.add(12);
+  if ([1,2,3].includes(hat)) cur.add(15);
+  if ([3,4,5].includes(hat)) cur.add(13);
+  if ([5,6,7].includes(hat)) cur.add(14);
+  [[0x10,2],[0x20,0],[0x40,1],[0x80,3]].forEach(([m, i]) => { if (b0 & m) cur.add(i); });
+  [4,5,6,7,8,9,10,11].forEach((i, bit) => { if (b1 & (1 << bit)) cur.add(i); });
+  if (b2 & 1) cur.add(16);
+  if (b2 & 2) cur.add(17);
+  for (let i = 0; i < 18; i++) {
+    const was = hs.btn.has(i), is = cur.has(i);
+    if (was === is) continue;
+    if (is) { if (hs.up[i] != null && now - hs.up[i] < CFG.chatterGapMs) noteChatter('hid', i); hs.dn[i] = now; }
+    else { if (hs.dn[i] != null && now - hs.dn[i] < CFG.chatterPressMs) noteChatter('hid', i); hs.up[i] = now; }
+  }
+  hs.btn = cur;
+}
+function noteChatter(src, i) {
+  const B = S.mode === 'test' && S.T.b[i];
+  if (!B) return;
+  B.chat[src]++;
+  if (B.chat[src] > Math.max(B.chat.poll, B.chat.hid) - 1) logEv(`Falso contato em ${lab(i)}`, true);
+}
+
+// ---------- vibração ----------
+function canRumble() { return !!currentPad()?.vibrationActuator || (S.hid && S.hidConn === 'usb'); }
+async function doRumble(strong, weak, ms) {
+  const gp = currentPad();
+  try {
+    if (gp?.vibrationActuator) {
+      await gp.vibrationActuator.playEffect('dual-rumble', {startDelay: 0, duration: ms, strongMagnitude: strong, weakMagnitude: weak});
+      return;
+    }
+  } catch (e) {}
+  if (S.hid && S.hidConn === 'usb') {
+    try { await hidMotors(strong, weak); setTimeout(() => hidMotors(0, 0).catch(() => {}), ms); } catch (e) {}
+  }
+}
+async function hidMotors(strong, weak) {
+  if (S.hidKind === 'ds5') {
+    const r = new Uint8Array(47); r[0] = 0x03; r[2] = Math.round(weak * 255); r[3] = Math.round(strong * 255);
+    await S.hid.sendReport(0x02, r);
+  } else {
+    const r = new Uint8Array(31); r[0] = 0x01; r[3] = Math.round(weak * 255); r[4] = Math.round(strong * 255);
+    await S.hid.sendReport(0x05, r);
+  }
+}
+
+// ---------- recalibração do centro dos analógicos (DS4 / DualSense) ----------
+// Protocolo do projeto open source DualShock Tools (MIT): a calibração vai para a RAM do controle
+// e só fica permanente depois do ciclo unlock/lock da memória (NVS).
+const CAL = {
+  ds5: {req: 0x82, resp: [0x83], wait: 50, begin: [1,1,1], sample: [3,1,1], end: [2,1,1],
+        ok: {begin: [0x83010101], sample: [0x83010101], end: [0x83010102]},
+        unlock: [0x80, [3,2,101,50,64,12]], lock: [0x80, [3,1]], ack: 0x81},
+  ds4: {req: 0x90, resp: [0x91, 0x92], wait: 200, begin: [1,1,1], sample: [3,1,1], end: [2,1,1],
+        ok: {begin: [0x91010101, 0x920101ff], sample: [0x91010101, 0x920101ff], end: [0x91010102, 0x92010101]},
+        unlock: [0xa0, [10,2,0x3e,0x71,0x7f,0x89]], lock: [0xa0, [10,1,0]], ack: null},
+};
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+function calibBlock() {
+  if (S.fam === 'xbox') return null;
+  if (S.ps3) return 'o DualShock 3 (PS3) não tem calibração por software — drift só se resolve trocando o módulo do analógico';
+  if (S.fam !== 'ps') return 'disponível para Xbox e PlayStation (DS4 / DualSense)';
+  if (!('hid' in navigator)) return 'navegador sem WebHID — use Chrome ou Edge';
+  if (!S.hid) return 'conecte os sensores do controle';
+  if (S.hidPid === 0x0df2) return 'DualSense Edge ainda não suportado';
+  if (S.hidConn !== 'usb') return 'ligue o controle pelo cabo USB';
+  return null;
+}
+function featLen(id, fallback) {
+  for (const c of S.hid.collections || []) for (const r of c.featureReports || []) {
+    if (r.reportId === id) return r.items.reduce((a, it) => a + it.reportSize * it.reportCount, 0) / 8;
+  }
+  return fallback;
+}
+async function sendFeat(id, arr) {
+  const out = new Uint8Array(featLen(id, arr.length) || arr.length);
+  out.set(arr.slice(0, out.length));
+  await S.hid.sendFeatureReport(id, out);
+}
+async function calStep(step) {
+  const c = CAL[S.hidKind];
+  await sendFeat(c.req, c[step]);
+  await sleep(c.wait);
+  for (let k = 0; k < c.resp.length; k++) {
+    const dv = await S.hid.receiveFeatureReport(c.resp[k]);
+    const got = dv.byteLength >= 4 ? dv.getUint32(0, false) : -1;
+    if (got !== c.ok[step][k]) throw new Error(`resposta inesperada do controle (${step}: 0x${(got >>> 0).toString(16)})`);
+  }
+}
+async function calSave() {
+  const c = CAL[S.hidKind];
+  await sendFeat(c.unlock[0], c.unlock[1]);
+  if (c.ack) await S.hid.receiveFeatureReport(c.ack);
+  await sleep(100);
+  await sendFeat(c.lock[0], c.lock[1]);
+  if (c.ack) await S.hid.receiveFeatureReport(c.ack);
+}
+function measureRest(ms) {
+  return new Promise(res => {
+    const smp = [], t = setInterval(() => { const gp = currentPad(); if (gp) smp.push(gp.axes.slice(0, 4)); }, 16);
+    setTimeout(() => {
+      clearInterval(t);
+      const st = (ix, iy) => {
+        if (!smp.length) return {off: NaN, std: 1};
+        const mx = smp.reduce((a, s) => a + s[ix], 0) / smp.length, my = smp.reduce((a, s) => a + s[iy], 0) / smp.length;
+        const v = smp.reduce((a, s) => a + (s[ix] - mx) ** 2 + (s[iy] - my) ** 2, 0) / smp.length;
+        return {off: Math.hypot(mx, my), std: Math.sqrt(v)};
+      };
+      res({L: st(0, 1), R: st(2, 3)});
+    }, ms);
+  });
+}
+
+function calibUI(html) { $('#calibBox').innerHTML = html; $('#calib').hidden = false; }
+function openCalib() {
+  const why = calibBlock();
+  if (why) { logEv(`Corrigir drift indisponível: ${why}`, true); return; }
+  if (S.fam === 'xbox') return openXboxCalib();
+  S.calib = {phase: 'intro'};
+  calibUI(`<h2>Corrigir drift</h2>
+    <p class="lead">Recalibra o <b>centro dos analógicos</b> direto na memória do controle — a correção vale no console também.</p>
+    <p class="lead">Antes de começar: <b>solte os dois analógicos</b> e deixe o controle parado sobre a mesa.</p>
+    <p class="mini" style="text-align:left">Não conserta desgaste físico: se o módulo do analógico estiver gasto, o drift volta. Nesse caso o laudo indica troca.</p>
+    <div class="actions"><button class="btn primary" data-k="enter">Calibrar <kbd>Enter</kbd></button><button class="btn" data-k="escape">Cancelar <kbd>Esc</kbd></button></div>`);
+}
+// Xbox: a calibração só é acessível pelo app oficial "Acessórios do Xbox"; aqui guiamos e medimos antes/depois.
+const XBOX_APP = 'ms-windows-store://pdp/?productid=9NBLGGH30XJ3';
+function sessionDrift(s) { return s.eps.length ? median(s.eps.map(e => e.off)) : NaN; }
+function openXboxCalib() {
+  const T = S.T;
+  S.calib = {phase: 'xbox', before: {L: {off: sessionDrift(T.st.L)}, R: {off: sessionDrift(T.st.R)}}};
+  calibUI(`<h2>Corrigir drift — Xbox</h2>
+    <p class="lead">A calibração do Xbox não é acessível pelo navegador. Ela é feita pelo app oficial <b>Acessórios do Xbox</b> (Xbox Wireless Controller e Elite Series 2).</p>
+    <ol class="misslist">
+      <li>Abra o app <b>Acessórios do Xbox</b> com o controle conectado (USB).</li>
+      <li>Se ele oferecer atualização de firmware, atualize primeiro.</li>
+      <li>Nas opções do controle, procure <b>Recalibrar</b> e siga as instruções para cada analógico.</li>
+      <li>Volte aqui, <b>solte o controle na mesa</b> e clique em "Medir de novo".</li>
+    </ol>
+    <div class="actions">
+      <button class="btn" data-k="store">Abrir Acessórios do Xbox</button>
+      <button class="btn primary" data-k="enter">Já recalibrei — medir de novo <kbd>Enter</kbd></button>
+      <button class="btn" data-k="escape">Cancelar <kbd>Esc</kbd></button>
+    </div>`);
+}
+async function remeasureXbox() {
+  const C = S.calib, T = S.T;
+  C.phase = 'run';
+  calibUI(`<h2>Corrigir drift — Xbox</h2><p class="lead"><span class="spin"></span>Medindo o drift depois da recalibração…</p><p class="mini" style="text-align:left">Não toque no controle.</p>`);
+  C.after = await measureRest(1500);
+  if (C.after.L.std > 0.02 || C.after.R.std > 0.02) {
+    logEv('Medição após recalibrar: analógicos se mexendo — solte o controle e meça de novo', true);
+    return openXboxCalib();
+  }
+  T.calib = {before: {L: C.before.L.off, R: C.before.R.off}, after: {L: C.after.L.off, R: C.after.R.off}, saved: true, via: 'Acessórios do Xbox'};
+  T.st.L.eps = []; T.st.L.cur = null; T.st.R.eps = []; T.st.R.cur = null;
+  logEv(`Drift após recalibrar no app Xbox: esq ${f3(C.after.L.off)}, dir ${f3(C.after.R.off)}`);
+  C.phase = 'done';
+  const cell = (a, b) => `<td>${f3(a)}</td><td class="${b <= CFG.drift.warn ? 'good' : 'bad'}">${f3(b)}</td>`;
+  const still = [C.after.L, C.after.R].some(s => s.off > CFG.drift.warn);
+  calibUI(`<h2>Resultado</h2>
+    <table class="cmp"><tr><th>Analógico</th><th>Antes</th><th>Depois</th></tr>
+      <tr><td>Esquerdo</td>${cell(C.before.L.off, C.after.L.off)}</tr>
+      <tr><td>Direito</td>${cell(C.before.R.off, C.after.R.off)}</tr></table>
+    <p class="lead">${still ? 'O desvio <b>continua alto</b> — provável desgaste do módulo do analógico.' : 'Desvio dentro do limite.'}</p>
+    <div class="actions"><button class="btn primary" data-k="enter">Fechar <kbd>Enter</kbd></button></div>`);
+  beep(!still);
+}
+function closeCalib() { S.calib = null; $('#calib').hidden = true; }
+async function runCalib() {
+  const C = S.calib;
+  C.phase = 'run';
+  const msg = t => calibUI(`<h2>Corrigir drift</h2><p class="lead"><span class="spin"></span>${t}</p><p class="mini" style="text-align:left">Não toque no controle.</p>`);
+  try {
+    msg('Medindo o drift atual…');
+    C.before = await measureRest(1000);
+    if (C.before.L.std > 0.02 || C.before.R.std > 0.02) throw new Error('os analógicos estão se mexendo — solte o controle na mesa e tente de novo');
+    msg('Calibrando o centro…');
+    await calStep('begin');
+    for (let k = 0; k < 4; k++) { await sleep(150); await calStep('sample'); }
+    await sleep(500);
+    await calStep('end');
+    msg('Conferindo o resultado…');
+    await sleep(600);
+    C.after = await measureRest(1200);
+  } catch (e) {
+    console.error(e);
+    C.phase = 'error';
+    logEv('Falha ao recalibrar: ' + e.message, true);
+    calibUI(`<h2>Não foi possível calibrar</h2><p class="lead">${esc(e.message)}</p>
+      <p class="mini" style="text-align:left">Nada foi gravado no controle. Se o problema continuar, desligue e religue o controle.</p>
+      <div class="actions"><button class="btn primary" data-k="enter">Fechar <kbd>Enter</kbd></button></div>`);
+    return;
+  }
+  C.phase = 'review';
+  const cell = (a, b) => `<td>${f3(a)}</td><td class="${b <= CFG.drift.warn ? 'good' : 'bad'}">${f3(b)}</td>`;
+  const still = [C.after.L, C.after.R].some(s => s.off > CFG.drift.warn);
+  calibUI(`<h2>Resultado da calibração</h2>
+    <table class="cmp"><tr><th>Analógico</th><th>Antes</th><th>Depois</th></tr>
+      <tr><td>Esquerdo</td>${cell(C.before.L.off, C.after.L.off)}</tr>
+      <tr><td>Direito</td>${cell(C.before.R.off, C.after.R.off)}</tr></table>
+    <p class="lead">${still ? 'O desvio <b>continua alto</b> — provável desgaste do módulo do analógico. Pode gravar mesmo assim, mas o controle deve ir para troca.' : 'Desvio dentro do limite. Grave para tornar a correção permanente.'}</p>
+    <div class="actions"><button class="btn primary" data-k="enter">Gravar no controle <kbd>Enter</kbd></button><button class="btn" data-k="escape">Não gravar <kbd>Esc</kbd></button></div>`);
+}
+async function finishCalib(save) {
+  const C = S.calib, T = S.T;
+  if (save) {
+    C.phase = 'run';
+    calibUI(`<h2>Corrigir drift</h2><p class="lead"><span class="spin"></span>Gravando na memória do controle…</p>`);
+    try { await calSave(); }
+    catch (e) {
+      console.error(e); save = false;
+      logEv('Falha ao gravar a calibração: ' + e.message, true);
+    }
+  }
+  if (T) {
+    T.calib = {before: {L: C.before.L.off, R: C.before.R.off}, after: {L: C.after.L.off, R: C.after.R.off}, saved: save};
+    T.st.L.eps = []; T.st.L.cur = null; T.st.R.eps = []; T.st.R.cur = null;   // drift do laudo passa a refletir a nova calibração
+    logEv(`Drift recalibrado (esq ${f3(C.before.L.off)} → ${f3(C.after.L.off)}, dir ${f3(C.before.R.off)} → ${f3(C.after.R.off)})${save ? ' e gravado' : ' — não gravado'}`, !save);
+  }
+  C.phase = 'done';
+  calibUI(save
+    ? `<h2>Calibração gravada</h2><p class="lead">A correção ficou salva no controle.</p><div class="actions"><button class="btn primary" data-k="enter">Fechar <kbd>Enter</kbd></button></div>`
+    : `<h2>Calibração não gravada</h2><p class="lead">A calibração anterior volta quando o controle for <b>desligado e religado</b>.</p><div class="actions"><button class="btn primary" data-k="enter">Fechar <kbd>Enter</kbd></button></div>`);
+  beep(save);
+}
+function calibKey(k) {
+  const p = S.calib.phase;
+  if (p === 'xbox') {
+    if (k === 'store') window.open(XBOX_APP);
+    else if (k === 'enter') remeasureXbox();
+    else if (k === 'escape') closeCalib();
+  }
+  else if (p === 'intro') { if (k === 'enter') runCalib(); else if (k === 'escape') closeCalib(); }
+  else if (p === 'review') { if (k === 'enter') finishCalib(true); else if (k === 'escape') finishCalib(false); }
+  else if (p === 'done' || p === 'error') { if (k === 'enter' || k === 'escape') closeCalib(); }
+}
+
+// ---------- canvases ----------
+function drawStick(cv, sec, trail, x, y) {
+  if (!cv) return;
+  const c = cv.getContext('2d'), W = cv.width, R = W / 2 - 18, cx = W / 2, cy = W / 2, n = sec.length;
+  c.clearRect(0, 0, W, W);
+  for (let k = 0; k < n; k++) {
+    const a0 = k / n * 2 * Math.PI - Math.PI, a1 = (k + 1) / n * 2 * Math.PI - Math.PI;
+    c.beginPath(); c.arc(cx, cy, R + 10, a0 + 0.02, a1 - 0.02); c.lineWidth = 7;
+    c.strokeStyle = sec[k] >= CFG.sectorOk ? COL['--ok'] : sec[k] > CFG.sectorTouched ? COL['--warn'] : COL['--line']; c.stroke();
+  }
+  c.lineWidth = 1; c.strokeStyle = COL['--line'];
+  c.beginPath(); c.arc(cx, cy, R, 0, 2 * Math.PI); c.stroke();
+  c.setLineDash([4, 4]); c.beginPath(); c.arc(cx, cy, R * CFG.sectorOk, 0, 2 * Math.PI); c.stroke(); c.setLineDash([]);
+  c.beginPath(); c.moveTo(cx - R, cy); c.lineTo(cx + R, cy); c.moveTo(cx, cy - R); c.lineTo(cx, cy + R); c.stroke();
+  c.beginPath();
+  sec.forEach((v, k) => { const a = (k + 0.5) / n * 2 * Math.PI - Math.PI, px = cx + Math.cos(a) * v * R, py = cy + Math.sin(a) * v * R; k ? c.lineTo(px, py) : c.moveTo(px, py); });
+  c.closePath(); c.fillStyle = 'rgba(79,140,255,.12)'; c.fill();
+  c.beginPath();
+  trail.forEach(([tx, ty], k) => { const px = cx + tx * R, py = cy + ty * R; k ? c.lineTo(px, py) : c.moveTo(px, py); });
+  c.strokeStyle = 'rgba(79,140,255,.5)'; c.lineWidth = 1.5; c.stroke();
+  c.beginPath(); c.arc(cx + x * R, cy + y * R, 6, 0, 2 * Math.PI); c.fillStyle = COL['--accent']; c.fill();
+}
+function drawTouch(cv, q, trail) {
+  if (!cv) return;
+  const c = cv.getContext('2d'), W = cv.width, H = cv.height;
+  c.fillStyle = COL['--panel2']; c.fillRect(0, 0, W, H);
+  q.forEach((v, i) => { if (v) { c.fillStyle = 'rgba(34,197,94,.22)'; c.fillRect((i % 2) * W / 2, (i >> 1) * H / 2, W / 2, H / 2); } });
+  c.strokeStyle = COL['--line']; c.setLineDash([5, 5]); c.beginPath();
+  c.moveTo(W / 2, 0); c.lineTo(W / 2, H); c.moveTo(0, H / 2); c.lineTo(W, H / 2); c.stroke(); c.setLineDash([]);
+  c.strokeStyle = COL['--accent']; c.lineWidth = 2; c.beginPath();
+  let pen = false;
+  for (const p of trail) { if (!p) { pen = false; continue; } const px = p[0] * W, py = p[1] * H; pen ? c.lineTo(px, py) : c.moveTo(px, py); pen = true; }
+  c.stroke();
+}
+
+// ---------- sessão de teste livre ----------
+const mkStick = () => ({sec: Array(CFG.sectors).fill(0), buf: [], eps: [], cur: null, far: false, trail: []});
+const mkTrig = () => ({max: 0, min: 1, lv: new Set(), n: 0, armed: false});
+
+function logEv(txt, bad = false) {
+  const T = S.T; if (!T) return;
+  T.log.push({t: performance.now() - T.t0, txt, bad});
+  if (T.log.length > 300) T.log.shift();
+  T.logV++;
+}
+
+async function startTest(gesture, idOverride) {
+  if (S.mode !== 'idle' || S.padIndex == null || S.starting) return;
+  if (S.fam === 'ps' && !S.ps3 && !S.hid && 'hid' in navigator) {
+    if (!gesture) { S._startHint = true; hint('Controle PlayStation: aperte Enter no teclado para liberar os sensores.'); setTimeout(() => S._startHint = false, 3000); return; }
+    S.starting = true; await hidRequest(); S.starting = false;
+    if (S.mode !== 'idle' || S.padIndex == null) return;
+  }
+  const gp = currentPad(), nb = gp.buttons.length, fam = S.fam, now = performance.now();
+  const T = {
+    id: idOverride || ($('#cid')?.value || '').trim() || autoId(), op: $('#op').value.trim(),
+    model: S.model, fam, start: Date.now(), t0: now, hidUsed: !!S.hid, disconnects: 0, log: [], logV: 0,
+    btns: ORDER.filter(i => i < nb && (i !== 17 || fam === 'ps')),
+    opt: fam === 'ps' ? [] : [16],     // botão Xbox/Home não é exposto pelo navegador
+    b: {}, st: {L: mkStick(), R: mkStick()}, tr: {}, rumble: {forte: null, fraco: null},
+    mo: {mn: Array(6).fill(Infinity), mx: Array(6).fill(-Infinity)}, tq: [0, 0, 0, 0], ttrail: [],
+    chg: {ok: false, err: null, usbSince: null, usbNoCharge: false},
+  };
+  for (const i of T.btns) T.b[i] = {n: 0, chat: {poll: 0, hid: 0}, cross: {}, maxHold: 0, downAt: S.prev[i] ? now : null, heldAtStart: !!S.prev[i]};
+  for (const i of [6, 7]) if (i < nb) T.tr[i] = mkTrig();
+  S.T = T; S.mode = 'test'; S.paused = false; S.confirm = false;
+  showView('test'); padReset(); renderShell(); logEv('Teste iniciado');
+}
+function autoId() { const n = store.get('ctrltest.seq', 0) + 1; store.set('ctrltest.seq', n); return 'CTRL-' + String(n).padStart(4, '0'); }
+function cancelTest() {
+  $('#pause').hidden = true; $('#confirm').hidden = true; S.paused = false; S.confirm = false; closeCalib();
+  $('#feed').innerHTML = ''; showStart();
+}
+
+function stickTick(s, x, y, now) {
+  const r = Math.hypot(x, y);
+  if (r > CFG.sectorTouched) {
+    const k = Math.floor((Math.atan2(y, x) + Math.PI) / (2 * Math.PI) * CFG.sectors) % CFG.sectors;
+    if (r > s.sec[k]) s.sec[k] = r;
+  }
+  if (r > 0.8) s.far = true;
+  s.buf.push([x, y]); if (s.buf.length > CFG.restWin) s.buf.shift();
+  if (s.buf.length === CFG.restWin) {
+    let mx = 0, my = 0;
+    for (const [a, b] of s.buf) { mx += a; my += b; }
+    mx /= CFG.restWin; my /= CFG.restWin;
+    let v = 0;
+    for (const [a, b] of s.buf) v += (a - mx) ** 2 + (b - my) ** 2;
+    const std = Math.sqrt(v / CFG.restWin), off = Math.hypot(mx, my);
+    // repouso = analógico solto: leitura estável perto do centro
+    if (std < CFG.restStd && off < 0.35) {
+      if (!s.cur) { s.cur = {off, std, t: now, dur: 0, after: s.far}; s.far = false; s.eps.push(s.cur); if (s.eps.length > 200) s.eps.shift(); }
+      s.cur.off = off; s.cur.std = std; s.cur.dur = now - s.cur.t;
+    } else s.cur = null;
+  }
+  s.trail.push([x, y]); if (s.trail.length > 300) s.trail.shift();
+}
+
+function tickSession({gp, now, down, up}) {
+  const T = S.T;
+  for (const i of T.btns) {
+    const B = T.b[i];
+    if (down.has(i)) {
+      B.n++; B.downAt = now; B.longLogged = false;
+      for (const j of down) if (j !== i && T.b[j]) B.cross[j] = (B.cross[j] || 0) + 1;
+      logEv(`${lab(i)} · ${B.n}x`);
+    }
+    if (up.has(i) && B.downAt != null) { B.maxHold = Math.max(B.maxHold, now - B.downAt); B.downAt = null; B.heldAtStart = false; }
+    if (B.downAt != null && !B.longLogged && now - B.downAt > CFG.longHoldMs) { B.longLogged = true; logEv(`${lab(i)} pressionado há mais de ${CFG.longHoldMs / 1000}s`, true); }
+  }
+  stickTick(T.st.L, gp.axes[0] || 0, gp.axes[1] || 0, now);
+  stickTick(T.st.R, gp.axes[2] || 0, gp.axes[3] || 0, now);
+  for (const i of [6, 7]) {
+    const t = T.tr[i]; if (!t) continue;
+    const v = gp.buttons[i]?.value || 0;
+    t.v = v; t.max = Math.max(t.max, v); t.min = Math.min(t.min, v);
+    if (v > 0.03 && v < 0.97) t.lv.add(Math.round(v * 1000));
+    if (v > 0.5 && !t.armed) { t.armed = true; t.n++; logEv(`${lab(i)} · ${t.n}x (${pct(t.max)})`); }
+    else if (v < 0.2) t.armed = false;
+  }
+  if (T.hidUsed && S.hid && now - S.hs.t < 200) {
+    [...S.hs.gyro, ...S.hs.accel].forEach((x, k) => { T.mo.mn[k] = Math.min(T.mo.mn[k], x); T.mo.mx[k] = Math.max(T.mo.mx[k], x); });
+    const t = S.hs.touch, W = 1920, H = S.hidKind === 'ds5' ? 1080 : 943;
+    if (t.on) {
+      T.tq[(t.x >= W / 2 ? 1 : 0) + (t.y >= H / 2 ? 2 : 0)] = 1;
+      T.ttrail.push([t.x / W, t.y / H]); if (T.ttrail.length > 400) T.ttrail.shift();
+    } else if (T.ttrail.length && T.ttrail[T.ttrail.length - 1]) T.ttrail.push(null);
+  }
+  if (S.hid && S.hs.batt && now - S.hs.t < 500) {
+    const b = S.hs.batt, c = T.chg;
+    if (b.err && !c.err) { c.err = b.err; logEv(`Erro de bateria/carga: ${b.err}`, true); }
+    if (b.power && !c.ok) { c.ok = true; logEv(b.full ? 'Cabo conectado — carga completa' : 'Cabo conectado — carregando'); }
+    if (S.hidConn === 'usb') { if (!c.usbSince) c.usbSince = now; } else c.usbSince = null;
+    if (c.usbSince && !b.power && now - c.usbSince > 5000 && !c.usbNoCharge) { c.usbNoCharge = true; logEv('No cabo USB mas não está carregando', true); }
+  }
+  renderLive(gp, now);
+}
+
+function btnLiveState(i) {
+  const B = S.T.b[i];
+  if (!B.n) return '';
+  const issue = B.chat.poll || B.chat.hid || (B.downAt != null && performance.now() - B.downAt > CFG.longHoldMs);
+  return issue ? 'warn' : B.n >= CFG.minPresses ? 'ok' : 'part';
+}
+const motionProgress = T => {
+  const rg = k => T.mo.mx[k] - T.mo.mn[k];
+  const best2 = (ks, goal) => { const r = ks.map(k => Math.min(1, Math.max(0, rg(k)) / goal)).sort((a, b) => b - a); return (r[0] + r[1]) / 2; };
+  return {g: best2([0, 1, 2], CFG.gyroRange), a: best2([3, 4, 5], CFG.accelRange)};
+};
+
+function renderShell() {
+  const T = S.T, rumbleNote = canRumble() ? '' : '<p class="mini" style="text-align:left">Vibração pode não funcionar nesta conexão — se não vibrar, marque "Não vibrou" só se tiver certeza.</p>';
+  stage(`<div class="thead">
+      <div><h2>Teste livre <span class="idtag">${esc(T.id)}</span></h2>
+      <p class="lead">Aperte <b>todos os botões várias vezes</b>, gire os analógicos <b>até a borda</b> e solte, aperte os gatilhos <b>até o fim</b>. Tudo é registrado automaticamente.</p></div>
+      <div class="timer" id="timer">0:00</div>
+    </div>
+    <div class="sec"><h3>Botões<span id="bcount"></span></h3>
+      <div class="bgrid">${T.btns.map(i => `<span class="bchip" id="c${i}">${esc(lab(i))}<small id="cn${i}"></small></span>`).join('')}</div></div>
+    <div class="sec two">
+      <div><h3>Analógico esquerdo</h3><canvas id="cvL" width="190" height="190"></canvas><p class="mini" id="infL"></p></div>
+      <div><h3>Analógico direito</h3><canvas id="cvR" width="190" height="190"></canvas><p class="mini" id="infR"></p></div>
+    </div>
+    <div class="calrow"><button class="btn sm" id="calbtn" data-k="calib">Corrigir drift</button><span class="mini" id="calwhy"></span></div>
+    <div class="sec"><h3>Gatilhos</h3>
+      ${Object.keys(T.tr).map(i => `<div class="trow"><b>${esc(lab(+i))}</b><div class="tbar"><i id="tb${i}"></i><b id="tm${i}"></b></div><span class="mini" id="ti${i}"></span></div>`).join('')}</div>
+    <div class="sec"><h3>Vibração</h3>
+      ${MOTORS.map(([k, n]) => `<div class="vrow"><span>${n}</span>
+        <button class="btn sm" data-k="v:${k}">▶ Vibrar</button>
+        <button class="btn sm" id="vy-${k}" data-k="y:${k}">Vibrou</button>
+        <button class="btn sm" id="vn-${k}" data-k="n:${k}">Não vibrou</button></div>`).join('')}
+      ${rumbleNote}</div>
+    ${T.fam === 'ps' ? `<div class="sec"><h3>Sensores</h3>${T.hidUsed ? `<div class="sens">
+        <div><div class="meter"><span>Giroscópio — gire o controle</span><div class="bar"><i id="mg"></i></div></div>
+             <div class="meter"><span>Acelerômetro — incline o controle</span><div class="bar"><i id="ma"></i></div></div></div>
+        <div><canvas id="tc" width="200" height="112"></canvas><p class="mini">Touchpad — passe pelos 4 cantos</p></div></div>`
+        : '<p class="mini" style="text-align:left">Sensores não conectados — giroscópio, touchpad e bateria não serão avaliados.</p>'}</div>
+      ${T.hidUsed ? `<div class="sec"><h3>Bateria e porta de carga</h3><p class="mini" style="text-align:left;font-size:14px" id="chg"></p></div>` : ''}` : ''}
+    <div class="actions">
+      <button class="btn primary" data-k="enter">Finalizar e gerar laudo <kbd>Enter</kbd></button>
+      <button class="btn" data-k="escape">Cancelar <kbd>Esc</kbd></button>
+    </div>`);
+  S._chipKey = {}; S._logV = -1; S._calwhy = undefined;
+}
+
+function renderLive(gp, now) {
+  const T = S.T;
+  $('#timer').textContent = mmss(now - T.t0);
+  let done = 0;
+  for (const i of T.btns) {
+    const st = btnLiveState(i), n = T.b[i].n;
+    if (st === 'ok') done++;
+    const key = st + n;
+    if (S._chipKey[i] !== key) { S._chipKey[i] = key; $('#c' + i).className = 'bchip ' + st; $('#cn' + i).textContent = n || ''; padState(i, st); }
+  }
+  $('#bcount').textContent = `${done}/${T.btns.length}`;
+  for (const [k, ix, iy] of [['L', 0, 1], ['R', 2, 3]]) {
+    const s = T.st[k], touched = s.sec.filter(v => v > CFG.sectorTouched).length, last = s.eps[s.eps.length - 1];
+    drawStick($('#cv' + k), s.sec, s.trail, gp.axes[ix] || 0, gp.axes[iy] || 0);
+    $('#inf' + k).textContent = `${touched}/${CFG.sectors} direções · repouso ${last ? f3(last.off) : '—'}`;
+  }
+  const why = calibBlock();
+  if (S._calwhy !== why) {
+    S._calwhy = why;
+    $('#calbtn').disabled = !!why;
+    $('#calwhy').textContent = why ? `Indisponível: ${why}.`
+      : S.fam === 'xbox' ? 'Recalibração pelo app Acessórios do Xbox, com medição antes e depois aqui.'
+      : 'Recalibra o centro dos dois analógicos na memória do controle.';
+  }
+  for (const i of Object.keys(T.tr)) {
+    const t = T.tr[i];
+    $('#tb' + i).style.width = t.v * 100 + '%'; $('#tm' + i).style.left = `calc(${t.max * 100}% - 3px)`;
+    $('#ti' + i).textContent = `máx ${pct(t.max)} · ${t.n}x`;
+  }
+  if (T.fam === 'ps' && T.hidUsed) {
+    const m = motionProgress(T);
+    $('#mg').style.width = m.g * 100 + '%'; $('#mg').classList.toggle('full', m.g >= 1);
+    $('#ma').style.width = m.a * 100 + '%'; $('#ma').classList.toggle('full', m.a >= 1);
+    drawTouch($('#tc'), T.tq, T.ttrail);
+    const b = S.hid && S.hs.batt, c = T.chg;
+    const port = c.err ? `<span class="t-bad">✕ erro de carga: ${c.err}</span>`
+      : c.ok ? '<span style="color:var(--ok)">✓ carregou ao conectar o cabo</span>'
+      : c.usbNoCharge ? '<span class="t-bad">✕ no cabo mas não carrega</span>'
+      : 'plugue o cabo — de preferência num <b>carregador de tomada</b> — para testar';
+    $('#chg').innerHTML = `Nível: <b>${b ? b.pct + '%' : '—'}</b>${b && b.charging ? ' ⚡' : ''} · Porta de carga: ${port}`;
+  }
+  if (S._logV !== T.logV) {
+    S._logV = T.logV;
+    $('#feed').innerHTML = '<h3>Registro</h3>' + T.log.slice(-10).reverse().map(e => `<div class="${e.bad ? 'bad' : ''}"><span>${mmss(e.t)}</span>${esc(e.txt)}</div>`).join('');
+  }
+}
+
+function setRumble(k, v) {
+  S.T.rumble[k] = v;
+  $('#vy-' + k)?.classList.toggle('sel-ok', v === true);
+  $('#vn-' + k)?.classList.toggle('sel-bad', v === false);
+  logEv(`${k === 'forte' ? 'Motor forte' : 'Motor fraco'}: ${v ? 'vibrou' : 'não vibrou'}`, !v);
+}
+
+// ---------- avaliação ----------
+function evaluate(T, now) {
+  const items = [], add = (g, n, st, d) => items.push({g, n, st, d});
+  // botões
+  const pairs = [];
+  for (const i of T.btns) for (const j of T.btns) if (i < j) {
+    const c = T.b[i].cross[j] || 0;
+    if (c >= CFG.crossMin && c >= CFG.crossRatio * Math.min(T.b[i].n, T.b[j].n)) pairs.push([i, j, c]);
+  }
+  const bst = {}, bn = {};
+  for (const i of T.btns) {
+    const B = T.b[i], L = lab(i, T.fam), d = [];
+    const hold = B.downAt != null ? Math.max(B.maxHold, now - B.downAt) : B.maxHold;
+    let st;
+    if (B.heldAtStart && B.downAt != null) { st = 'fail'; d.push('acionado o tempo todo (preso)'); }
+    else if (!B.n) {
+      if (T.opt.includes(i)) { st = 'na'; d.push('não exposto pelo navegador'); }
+      else { st = 'miss'; d.push('sem registro — não foi apertado ou não funciona'); }
+    } else {
+      st = B.n >= CFG.minPresses ? 'ok' : 'miss';
+      d.push(`${B.n} acionamento${B.n > 1 ? 's' : ''}${B.n < CFG.minPresses ? ` (mínimo ${CFG.minPresses})` : ''}`);
+      const c = Math.max(B.chat.poll, B.chat.hid);
+      if (c) { st = worse(st, c >= CFG.chatterFail ? 'fail' : 'warn'); d.push(`falso contato ${c}x`); }
+      for (const [a, b, c2] of pairs) if (a === i || b === i) { st = worse(st, 'warn'); d.push(`acionou junto com ${lab(a === i ? b : a, T.fam)} (${c2}x)`); }
+      if (hold > CFG.longHoldMs) { st = worse(st, 'warn'); d.push(`ficou ${Math.round(hold / 1000)}s pressionado — conferir se trava`); }
+    }
+    bst[i] = st; bn[i] = B.n;
+    add('Botões', L, st, d.join(' · '));
+  }
+  // analógicos
+  for (const [k, nm] of [['L', 'esquerdo'], ['R', 'direito']]) {
+    const s = T.st[k];
+    if (!s.eps.length) add('Analógicos', `Drift — ${nm}`, 'miss', 'repouso não medido — solte o analógico por 1 segundo');
+    else {
+      const off = median(s.eps.map(e => e.off)), sd = median(s.eps.map(e => e.std));
+      let st = grade(off, CFG.drift), d = `desvio ${f3(off)} com o analógico solto`;
+      if (sd > CFG.noiseWarn) { st = worse(st, 'warn'); d += `, leitura oscilando (±${f3(sd)})`; }
+      add('Analógicos', `Drift — ${nm}`, st, d);
+    }
+    const rets = s.eps.filter(e => e.after && e.dur >= CFG.retMinMs).map(e => e.off);
+    if (rets.length) { const w = Math.max(...rets); add('Analógicos', `Retorno ao centro — ${nm}`, grade(w, CFG.ret), `pior desvio ${f3(w)} em ${rets.length} soltura${rets.length > 1 ? 's' : ''}`); }
+    else add('Analógicos', `Retorno ao centro — ${nm}`, 'miss', 'não medido — leve até a borda e solte');
+    const touched = s.sec.filter(v => v > CFG.sectorTouched).length;
+    if (touched < CFG.sectors) add('Analógicos', `Curso — ${nm}`, 'miss', `giro incompleto (${touched}/${CFG.sectors} direções)`);
+    else {
+      let min = Infinity, wk = 0;
+      s.sec.forEach((v, k2) => { if (v < min) { min = v; wk = k2; } });
+      add('Analógicos', `Curso — ${nm}`, gradeLow(min, CFG.reach), min >= CFG.reach.warn ? `alcance mínimo ${pct(min)}` : `não chega na borda para ${secName(wk)} (${pct(min)})`);
+    }
+  }
+  if (T.calib) {
+    const c = T.calib, still = Math.max(c.after.L, c.after.R) > CFG.drift.warn;
+    add('Analógicos', 'Recalibração de drift', !c.saved ? 'warn' : still ? 'warn' : 'ok',
+        `esquerdo ${f3(c.before.L)} → ${f3(c.after.L)} · direito ${f3(c.before.R)} → ${f3(c.after.R)}`
+        + (!c.saved ? ' — não gravada no controle' : still ? ' — drift persiste, provável desgaste do módulo' : c.via ? ` — via ${c.via}` : ' — gravada no controle'));
+  }
+  // gatilhos
+  for (const i of Object.keys(T.tr)) {
+    const t = T.tr[i], L = lab(+i, T.fam);
+    if (t.max < 0.05) { add('Gatilhos', L, 'miss', 'sem registro — não foi apertado ou não funciona'); continue; }
+    let st = gradeLow(t.max, CFG.trigMax);
+    const d = [`chega a ${pct(t.max)}`, `${t.n} acionamento${t.n === 1 ? '' : 's'}`];
+    if (t.min > CFG.trigRest) { st = 'fail'; d.push(`não volta ao zero (${pct(t.min)} solto)`); }
+    if (t.lv.size < CFG.trigLevels) { st = worse(st, 'warn'); d.push('leitura sem progressão (liga/desliga)'); }
+    add('Gatilhos', L, st, d.join(' · '));
+  }
+  // vibração
+  const rumbleUntested = MOTORS.every(([k]) => T.rumble[k] == null);
+  if (rumbleUntested && !canRumble()) add('Vibração', 'Motores', 'na', 'não suportado nesta conexão/navegador');
+  else for (const [k, n] of MOTORS) {
+    const v = T.rumble[k];
+    add('Vibração', n, v == null ? 'miss' : v ? 'ok' : 'fail', v == null ? 'não testado' : v ? 'vibrou' : 'não vibrou');
+  }
+  // sensores (PS)
+  if (T.fam === 'ps') {
+    if (!T.hidUsed) add('Sensores', 'Giroscópio e touchpad', 'na', 'sensores não conectados');
+    else {
+      const m = motionProgress(T), moved = [0,1,2,3,4,5].some(k => T.mo.mx[k] - T.mo.mn[k] > CFG.moveSeen);
+      add('Sensores', 'Giroscópio / acelerômetro', m.g >= 1 && m.a >= 1 ? 'ok' : 'miss',
+          m.g >= 1 && m.a >= 1 ? 'responde ao movimento' : moved ? 'movimento insuficiente — gire e incline mais' : 'sem registro — não foi testado ou não funciona');
+      const q = T.tq.filter(Boolean).length;
+      add('Sensores', 'Touchpad', q === 4 ? 'ok' : 'miss', q === 4 ? '4 regiões responderam' : q ? `só ${q} de 4 regiões tocadas` : 'sem registro — não foi testado ou não funciona');
+    }
+  }
+  // bateria
+  if (T.batt) {
+    const b = T.batt, st = b.err ? 'fail' : b.pct < CFG.battLow ? 'warn' : 'ok';
+    add('Bateria', 'Nível / carga', st, `${b.pct}%${b.charging ? ', carregando' : ''}${b.full ? ', carga completa' : ''}${b.err ? ' — ' + b.err : ''}${st === 'warn' ? ' — bateria baixa' : ''}`);
+  } else add('Bateria', 'Nível / carga', 'na', T.fam === 'xbox' ? 'o navegador não informa a bateria do Xbox' : 'sensores não conectados');
+  const c = T.chg;
+  if (!T.hidUsed) add('Bateria', 'Porta de carga', 'na', 'não verificável pelo navegador neste controle');
+  else if (c.err) add('Bateria', 'Porta de carga', 'fail', `erro de carga: ${c.err}`);
+  else if (c.ok) add('Bateria', 'Porta de carga', 'ok', 'carregou ao conectar o cabo — porta e circuito de carga OK');
+  else if (c.usbNoCharge) add('Bateria', 'Porta de carga', 'fail', 'conectado pelo cabo USB mas não carrega — porta ou circuito de carga com defeito');
+  else add('Bateria', 'Porta de carga', 'miss', 'não testado — conecte o cabo para verificar se carrega');
+  const bh = benchLatest(T.id);
+  if (bh) add('Bateria', 'Saúde (bancada)', bh.st, `${bh.verdict} — autonomia ${bh.autonomyH.toFixed(1).replace('.', ',')} h com carga máxima${bh.health != null ? ` (${pct(bh.health)} da referência)` : ''} · medido em ${fmtDate(bh.ts)}`);
+  add('Conexão', 'Estabilidade', T.disconnects ? 'warn' : 'ok',
+      T.disconnects ? `desconectou ${T.disconnects}x durante o teste — verificar cabo, conector ou bateria` : 'sem quedas');
+  return {items, bst, bn};
+}
+
+function finalize(force) {
+  const T = S.T, now = performance.now();
+  T.batt = S.hid && S.hs.batt ? {...S.hs.batt} : null;
+  const {items, bst, bn} = evaluate(T, now);
+  const miss = items.filter(i => i.st === 'miss');
+  if (miss.length && !force) {
+    S.confirm = true;
+    $('#confirmBox').innerHTML = `<h2>Faltou testar</h2>
+      <p class="lead">Estes itens não foram registrados. Se você testou e não respondeu, provavelmente é defeito.</p>
+      <ul class="misslist">${miss.map(m => `<li><b>${esc(m.n)}</b> — ${esc(m.d)}</li>`).join('')}</ul>
+      <div class="actions"><button class="btn primary" data-k="escape">Continuar testando <kbd>Esc</kbd></button>
+      <button class="btn" data-k="enter">Gerar laudo assim mesmo <kbd>Enter</kbd></button></div>`;
+    $('#confirm').hidden = false;
+    return;
+  }
+  $('#confirm').hidden = true; S.confirm = false;
+  const verdict = items.some(i => i.st === 'fail') ? 'REPROVADO'
+    : miss.length ? 'INCOMPLETO'
+    : items.some(i => i.st === 'warn') ? 'APROVADO COM RESSALVAS' : 'APROVADO';
+  const rec = {
+    id: T.id, ts: T.start, dur: Date.now() - T.start, op: T.op, model: T.model, fam: T.fam,
+    conn: T.hidUsed ? S.hidConn : null, verdict, items, batt: T.batt ? T.batt.pct : null,
+    btns: T.btns.map(i => ({l: lab(i, T.fam), st: bst[i], n: bn[i]})),
+    events: T.log.filter(e => e.bad).map(e => `${mmss(e.t)} ${e.txt}`),
+  };
+  const H = store.get('ctrltest.hist', []); H.unshift(rec); store.set('ctrltest.hist', H.slice(0, 5000));
+  S.lastRec = rec; S.mode = 'report'; S.reportAt = performance.now(); S.T = null;
+  $('#feed').innerHTML = '';
+  beep(verdict === 'APROVADO' || verdict === 'APROVADO COM RESSALVAS', verdict === 'APROVADO' ? 1046 : undefined);
+  renderReport(rec, false);
+}
+
+// ---------- laudo ----------
+const vclass = v => v === 'REPROVADO' ? 'fail' : v === 'APROVADO' ? 'ok' : v === 'INCOMPLETO' ? 'miss' : 'warn';
+function renderReport(rec, fromHist) {
+  S.reportFromHist = fromHist; showView('report');
+  const vc = vclass(rec.verdict);
+  const probs = rec.items.filter(i => i.st === 'fail' || i.st === 'warn').sort((a, b) => RANK[b.st] - RANK[a.st]);
+  const miss = rec.items.filter(i => i.st === 'miss');
+  const okB = rec.btns.filter(b => b.st === 'ok').length;
+  let rows = '', g = null;
+  for (const it of rec.items) {
+    if (it.g !== g) { g = it.g; rows += `<tr class="grp"><td colspan="3">${esc(g)}</td></tr>`; }
+    rows += `<tr><td><span class="pill ${it.st}">${ICON[it.st]} ${STLABEL[it.st]}</span></td><td>${esc(it.n)}</td><td>${esc(it.d)}</td></tr>`;
+  }
+  const list = arr => `<ul class="probs">${arr.map(p => `<li><span class="pill ${p.st}">${STLABEL[p.st]}</span><b>${esc(p.n)}</b> — ${esc(p.d)}</li>`).join('')}</ul>`;
+  $('#view-report').innerHTML = `
+    <div class="rhead ${vc}">
+      <div class="verdict">${ICON[vc]} ${rec.verdict}</div>
+      <div class="rmeta"><b>${esc(rec.id)}</b> · ${esc(rec.model)}${rec.conn ? ' · ' + (rec.conn === 'usb' ? 'USB' : 'Bluetooth') : ''} · ${fmtDate(rec.ts)} · Operador: ${esc(rec.op || '—')} · duração ${mmss(rec.dur)}</div>
+    </div>
+    <div class="rgrid">
+      <div class="panel"><h3>Defeitos encontrados</h3>${probs.length ? list(probs) : '<p class="none">✓ Nenhum defeito encontrado.</p>'}</div>
+      <div class="panel"><h3>Faltou testar</h3>${miss.length ? list(miss) : '<p class="none">✓ Todos os itens foram testados.</p>'}</div>
+    </div>
+    <div class="panel" style="margin-bottom:16px"><h3>Botões — ${okB} de ${rec.btns.length} OK</h3>
+      <div class="bgrid">${rec.btns.map(b => `<span class="bchip ${b.st}">${esc(b.l)}<small>${b.n || ''}</small></span>`).join('')}</div></div>
+    <div class="panel"><h3>Todas as verificações</h3><table class="tbl"><tbody>${rows}</tbody></table></div>
+    <div class="actions noprint">
+      ${fromHist ? '<button class="btn" data-k="escape">Voltar <kbd>Esc</kbd></button>'
+                 : `<button class="btn primary" data-k="enter">Próximo controle <kbd>Enter / ${esc(lab(0, rec.fam))}</kbd></button><button class="btn" data-k="r">Refazer teste <kbd>R</kbd></button>`}
+      <button class="btn" data-k="p">Imprimir / PDF <kbd>P</kbd></button>
+    </div>`;
+}
+
+// ---------- tela inicial ----------
+function showStart() {
+  S.mode = 'idle'; S.T = null; showView('test'); padReset();
+  stage(`<h2 id="sTitle"></h2>
+    <p class="lead" id="sLead"></p>
+    <label class="field"><span>ID / código do controle</span><input id="cid" autocomplete="off" spellcheck="false" placeholder="Bipe ou digite — opcional"></label>
+    <p class="hint" id="hint"></p>
+    <p class="lead" style="margin:6px 0 0">Durante o teste, o app registra sozinho:</p>
+    <ul class="plan"><li>Botões que não respondem</li><li>Falso contato / clique falhando</li><li>Botão preso ou acionando outro</li><li>Drift e retorno ao centro</li><li>Curso dos analógicos e gatilhos</li><li>Vibração, bateria e sensores (PS)</li><li>Tudo que ficou sem testar</li></ul>
+    <div class="actions"><button class="btn primary" id="go" data-k="enter">Iniciar teste <kbd>Enter</kbd></button></div>`);
+  setTimeout(() => $('#cid')?.focus(), 0);
+  refreshStart();
+}
+function refreshStart() {
+  if (S.mode !== 'idle' || S.view !== 'test' || !$('#sTitle')) return;
+  const has = S.padIndex != null, n = [...navigator.getGamepads()].filter(p => p && p.connected).length;
+  const needHid = has && S.fam === 'ps' && !S.ps3 && !S.hid && 'hid' in navigator;
+  $('#sTitle').textContent = has ? `${S.model} pronto` : 'Conecte um controle';
+  $('#sLead').innerHTML = !has
+    ? 'Ligue por USB ou Bluetooth e <b>aperte qualquer botão</b> — o navegador só enxerga o controle depois do primeiro toque.'
+    : needHid
+      ? 'Bipe ou digite o código e aperte <b>Enter</b>. Na janela que abrir, selecione o controle para liberar bateria, giroscópio e touchpad.'
+      : `Bipe ou digite o código e aperte <b>Enter</b> — ou <b>${lab(0)}</b> no controle.`;
+  $('#go').disabled = !has;
+  const w = [];
+  if (n > 1) w.push('Mais de um controle conectado — deixe só o que vai ser testado.');
+  if (has && S.mapping !== 'standard') w.push('Mapeamento não padrão: os resultados podem não ser confiáveis.');
+  if (!S._startHint) hint(w.join(' '));
+}
+
+// ---------- bancada de bateria ----------
+// O controle só informa o nível em passos de 10%: a autonomia sai do tempo entre quedas de nível,
+// com vibração e luz no máximo para que cada queda leve minutos em vez de horas.
+const CRC_T = (() => { const t = new Uint32Array(256); for (let n = 0; n < 256; n++) { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xEDB88320 ^ (c >>> 1) : c >>> 1; t[n] = c >>> 0; } return t; })();
+function crc32(...parts) { let c = 0xFFFFFFFF; for (const p of parts) for (const b of p) c = CRC_T[(c ^ b) & 0xff] ^ (c >>> 8); return (c ^ 0xFFFFFFFF) >>> 0; }
+function putCrc(id, r) { const n = r.length - 4; new DataView(r.buffer).setUint32(n, crc32([0xA2, id], r.subarray(0, n)), true); }
+
+const BENCH = {list: [], wake: null, timer: null, seq: 0};
+const benchVerdict = h => h == null ? null : h >= 0.8 ? ['Bateria boa', 'ok'] : h >= 0.6 ? ['Bateria desgastada', 'warn'] : ['Bateria fraca', 'fail'];
+function benchRefs() { return store.get('ctrltest.benchRef', {ds5: null, ds4: null}); }
+function benchLatest(id) {
+  const r = store.get('ctrltest.bench', []).find(x => x.id === id);
+  if (!r) return null;
+  const v = r.err ? ['Erro de bateria', 'fail'] : benchVerdict(r.health) || ['Medida sem referência', 'na'];
+  return {...r, verdict: v[0], st: v[1]};
+}
+async function sendLoad(c, on) {
+  const v = on ? 255 : 0, d = c.d;
+  if (c.kind === 'ds5') {
+    const common = new Uint8Array(47);
+    common[0] = 0x03; common[1] = 0x04;                    // vibração compatível + controle da barra de luz
+    common[2] = v; common[3] = v; common[44] = v; common[45] = v; common[46] = v;
+    if (c.conn === 'usb') return d.sendReport(0x02, common);
+    const r = new Uint8Array(77);
+    c.seq = (c.seq + 1) & 0x0f; r[0] = c.seq << 4; r[1] = 0x10; r.set(common, 2);
+    putCrc(0x31, r); return d.sendReport(0x31, r);
+  }
+  if (c.conn === 'usb') { const r = new Uint8Array(31); r[0] = 0x07; r.fill(v, 3, 8); return d.sendReport(0x05, r); }
+  const r = new Uint8Array(77); r[0] = 0xC0; r[2] = 0x07; r.fill(v, 5, 10);
+  putCrc(0x11, r); return d.sendReport(0x11, r);
+}
+async function benchAdd(d) {
+  if (BENCH.list.some(c => c.d === d)) return;
+  if (!d.opened) await d.open();
+  const kind = hidKindOf(d);
+  const c = {n: BENCH.seq++, d, kind, model: kind === 'ds5' ? (d.productId === 0x0df2 ? 'DualSense Edge' : 'DualSense') : 'DualShock 4',
+             id: '', conn: null, batt: null, seen: 0, running: false, start: 0, marks: [], minLv: null, seq: 0, err: null, lost: false, saved: false};
+  c.onrep = e => benchReport(c, e);
+  d.addEventListener('inputreport', c.onrep);
+  d.receiveFeatureReport(fullModeReport(kind)).catch(() => {});
+  BENCH.list.push(c);
+  benchCard(c);
+}
+function benchReport(c, e) {
+  const lay = hidLayout(c.kind, e.reportId, e.data.byteLength);
+  if (!lay) return;
+  const b = readBatt(c.kind, e.data, lay.o), now = Date.now();
+  c.conn = lay.conn; c.batt = b; c.seen = now; c.lost = false;
+  if (b.err) c.err = b.err;
+  if (!c.running) return;
+  if (b.power) { c.marks = []; c.minLv = null; return; }   // no cabo: carregando, recomeça a contagem
+  if (c.minLv == null) { c.minLv = b.lv; return; }
+  if (b.lv < c.minLv) { c.marks.push({t: now, lv: b.lv}); c.minLv = b.lv; }
+  else if (b.lv >= c.minLv + 2) { c.marks = []; c.minLv = b.lv; }
+}
+function benchCalc(c) {
+  if (c.marks.length < 2) return null;
+  const a = c.marks[0], z = c.marks[c.marks.length - 1];
+  const ratePerH = (a.lv - z.lv) * 10 / ((z.t - a.t) / 3.6e6);
+  const autonomyH = 100 / ratePerH, ref = benchRefs()[c.kind];
+  return {ratePerH, autonomyH, health: ref ? autonomyH / ref : null};
+}
+function benchLost(d) { const c = BENCH.list.find(x => x.d === d); if (c) { c.lost = true; c.running = false; } }
+async function benchStart(c) {
+  if (c.lost) return;
+  c.running = true; c.start = Date.now(); c.marks = []; c.minLv = null; c.saved = false;
+  try { await sendLoad(c, true); } catch (e) { console.warn(e); }
+  benchTimers();
+}
+async function benchStop(c) {
+  c.running = false;
+  try { await sendLoad(c, false); } catch (e) {}
+  benchTimers();
+}
+function benchTimers() {
+  const any = BENCH.list.some(c => c.running);
+  if (any && !BENCH.timer) {
+    // reenviar a carga periodicamente: alguns controles soltam a vibração depois de um tempo
+    BENCH.timer = setInterval(() => BENCH.list.forEach(c => { if (c.running && c.conn) sendLoad(c, true).catch(() => {}); }), 2000);
+    if (navigator.wakeLock) navigator.wakeLock.request('screen').then(w => BENCH.wake = w).catch(() => {});
+  } else if (!any && BENCH.timer) {
+    clearInterval(BENCH.timer); BENCH.timer = null;
+    BENCH.wake?.release().catch(() => {}); BENCH.wake = null;
+  }
+}
+function benchCard(c) {
+  const el = document.createElement('div');
+  el.className = 'panel bcard'; el.id = 'bc' + c.n;
+  el.innerHTML = `<div class="bhead"><b>${c.model}</b><span class="pill na" id="bc${c.n}-conn">—</span><input placeholder="ID do controle" data-bid="${c.n}"></div>
+    <div class="bbig" id="bc${c.n}-pct">—</div>
+    <div class="bmsg" id="bc${c.n}-msg"></div>
+    <dl class="bstat">
+      <dt>Tempo</dt><dd id="bc${c.n}-time">—</dd>
+      <dt>Quedas de 10%</dt><dd id="bc${c.n}-drops">—</dd>
+      <dt>Consumo</dt><dd id="bc${c.n}-rate">—</dd>
+      <dt>Autonomia</dt><dd id="bc${c.n}-aut">—</dd>
+    </dl>
+    <div class="bverd" id="bc${c.n}-verd"></div>
+    <div class="actions" style="padding-top:12px">
+      <button class="btn sm primary" data-b="toggle:${c.n}" id="bc${c.n}-tg">Iniciar</button>
+      <button class="btn sm" data-b="save:${c.n}" id="bc${c.n}-save" disabled>Salvar resultado</button>
+      <button class="btn sm" data-b="ref:${c.n}" id="bc${c.n}-ref" disabled>Usar como referência</button>
+      <button class="btn sm" data-b="del:${c.n}">Remover</button>
+    </div>`;
+  $('#bcards').appendChild(el);
+}
+function benchRender() {
+  const now = Date.now();
+  for (const c of BENCH.list) {
+    if (!c.d) continue;
+    const q = s => $(`#bc${c.n}-${s}`), r = benchCalc(c), b = c.batt;
+    const conn = q('conn'); conn.textContent = c.lost ? 'desconectado' : c.conn === 'bt' ? 'Bluetooth' : c.conn === 'usb' ? 'USB' : '—';
+    conn.className = 'pill ' + (c.lost ? 'fail' : c.conn === 'bt' ? 'ok' : c.conn === 'usb' ? 'warn' : 'na');
+    q('pct').textContent = b ? `${b.pct}%${b.power ? ' ⚡' : ''}` : '—';
+    let msg = '', bad = false;
+    if (c.err) { msg = `Erro informado pelo controle: ${c.err}`; bad = true; }
+    else if (c.lost) { msg = 'Controle desconectado — a medição parou.'; bad = true; }
+    else if (!c.seen || now - c.seen > 5000) { msg = 'Sem dados do controle.'; bad = true; }
+    else if (b && b.power) { msg = 'No cabo / carregando — desconecte o cabo para medir.'; bad = true; }
+    else if (c.running) msg = !c.marks.length ? 'Medindo — aguardando a 1ª queda de nível…' : c.marks.length < 2 ? 'Medindo — aguardando a 2ª queda de nível…' : 'Medindo — resultado disponível (mais quedas = mais preciso).';
+    else msg = r ? 'Parado.' : 'Pronto para iniciar.';
+    q('msg').textContent = msg; q('msg').className = 'bmsg' + (bad ? ' bad' : '');
+    q('time').textContent = c.running ? mmss(now - c.start) : '—';
+    q('drops').textContent = c.running || c.marks.length ? String(c.marks.length) : '—';
+    q('rate').textContent = r ? `${r.ratePerH.toFixed(1).replace('.', ',')} %/h` : '—';
+    q('aut').textContent = r ? `${r.autonomyH.toFixed(1).replace('.', ',')} h com carga máxima` : '—';
+    const v = c.err ? ['Erro de bateria', 'fail'] : r ? benchVerdict(r.health) || ['Defina a referência do modelo', ''] : null;
+    q('verd').textContent = v ? v[0] + (r && r.health != null ? ` · ${pct(r.health)} da referência` : '') : '';
+    q('verd').className = 'bverd ' + (v ? v[1] : '');
+    q('tg').textContent = c.running ? 'Parar' : 'Iniciar'; q('tg').disabled = c.lost;
+    q('save').disabled = !(r || c.err) || c.saved; q('save').textContent = c.saved ? 'Salvo' : 'Salvar resultado';
+    q('ref').disabled = !r;
+  }
+}
+function benchSave(c) {
+  const r = benchCalc(c);
+  const rec = {id: c.id.trim() || autoId(), model: c.model, kind: c.kind, ts: Date.now(), err: c.err,
+               ratePerH: r ? r.ratePerH : null, autonomyH: r ? r.autonomyH : null, health: r ? r.health : null};
+  const H = store.get('ctrltest.bench', []); H.unshift(rec); store.set('ctrltest.bench', H.slice(0, 5000));
+  c.saved = true; c.id = rec.id; $(`[data-bid="${c.n}"]`).value = rec.id;
+  benchResults(); benchRender();
+}
+function benchResults() {
+  const H = store.get('ctrltest.bench', []);
+  $('#bres').innerHTML = H.map(r => {
+    const v = r.err ? ['Erro de bateria', 'fail'] : benchVerdict(r.health) || ['Sem referência', 'na'];
+    const n = x => x == null ? '—' : x.toFixed(1).replace('.', ',');
+    return `<tr><td>${fmtDate(r.ts)}</td><td><b>${esc(r.id)}</b></td><td>${esc(r.model)}</td><td>${n(r.ratePerH)} %/h</td><td>${n(r.autonomyH)} h</td>
+      <td>${r.health != null ? pct(r.health) : '—'}</td><td><span class="pill ${v[1]}">${v[0]}</span></td></tr>`;
+  }).join('') || '<tr><td colspan="7" class="empty">Nenhuma medição salva.</td></tr>';
+}
+function benchCSV() {
+  const rows = [['Data','ID','Modelo','Consumo %/h','Autonomia h (carga máx.)','Saúde % da referência','Resultado']];
+  for (const r of store.get('ctrltest.bench', [])) {
+    const v = r.err ? 'Erro de bateria: ' + r.err : (benchVerdict(r.health) || ['Sem referência'])[0];
+    const n = x => x == null ? '' : x.toFixed(2).replace('.', ',');
+    rows.push([fmtDate(r.ts), r.id, r.model, n(r.ratePerH), n(r.autonomyH), r.health != null ? Math.round(r.health * 100) : '', v]);
+  }
+  const csv = '﻿' + rows.map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(';')).join('\r\n');
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([csv], {type: 'text/csv;charset=utf-8'}));
+  a.download = `bancada-bateria-${new Date().toISOString().slice(0, 10)}.csv`; a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+}
+async function benchOpen() {
+  benchResults();
+  const refs = benchRefs();
+  $('#ref-ds5').value = refs.ds5 ?? ''; $('#ref-ds4').value = refs.ds4 ?? '';
+  if (!('hid' in navigator)) { $('#bcards').innerHTML = '<div class="panel">Navegador sem WebHID — use Chrome ou Edge.</div>'; return; }
+  try { for (const d of await navigator.hid.getDevices()) if (d.vendorId === SONY && SONY_PIDS.includes(d.productId)) await benchAdd(d); } catch (e) {}
+}
+function benchAction(act, n) {
+  const c = BENCH.list.find(x => x.n === n); if (!c) return;
+  if (act === 'toggle') c.running ? benchStop(c) : benchStart(c);
+  else if (act === 'save') benchSave(c);
+  else if (act === 'ref') {
+    const r = benchCalc(c), refs = benchRefs();
+    refs[c.kind] = +r.autonomyH.toFixed(2); store.set('ctrltest.benchRef', refs);
+    $('#ref-' + c.kind).value = refs[c.kind];
+  } else if (act === 'del') {
+    benchStop(c); c.d.removeEventListener('inputreport', c.onrep);
+    if (c.d !== S.hid) c.d.close().catch(() => {});
+    BENCH.list = BENCH.list.filter(x => x !== c); $('#bc' + c.n).remove();
+  }
+  benchRender();
+}
+$('#badd').addEventListener('click', async () => {
+  if (!('hid' in navigator)) return;
+  try { for (const d of await navigator.hid.requestDevice({filters: SONY_PIDS.map(productId => ({vendorId: SONY, productId}))})) await benchAdd(d); }
+  catch (e) { console.warn(e); }
+});
+$('#bstartall').addEventListener('click', () => BENCH.list.forEach(c => { if (!c.running && !c.lost) benchStart(c); }));
+$('#bstopall').addEventListener('click', () => BENCH.list.forEach(c => { if (c.running) benchStop(c); }));
+$('#bcsv').addEventListener('click', benchCSV);
+['ds5', 'ds4'].forEach(k => $('#ref-' + k).addEventListener('change', e => {
+  const refs = benchRefs(), v = parseFloat(String(e.target.value).replace(',', '.'));
+  refs[k] = v > 0 ? v : null; store.set('ctrltest.benchRef', refs);
+}));
+$('#bcards').addEventListener('input', e => { const n = e.target.dataset.bid; if (n != null) { const c = BENCH.list.find(x => x.n === +n); if (c) c.id = e.target.value; } });
+setInterval(() => { if (S.view === 'bench') benchRender(); }, 1000);
+window.addEventListener('beforeunload', () => BENCH.list.forEach(c => { if (c.running) sendLoad(c, false).catch(() => {}); }));
+
+// ---------- histórico ----------
+function batteryCell(r) {
+  const bh = benchLatest(r.id);
+  const lvl = r.batt != null ? r.batt + '%' : '—';
+  return bh ? `${lvl}<br><span class="pill ${bh.st}">${esc(bh.verdict)}</span>` : lvl;
+}
+function renderHistory() {
+  const H = store.get('ctrltest.hist', []), q = $('#hq').value.trim().toLowerCase(), f = $('#hf').value;
+  const pend = r => r.items.filter(i => i.st === 'fail' || i.st === 'warn' || i.st === 'miss');
+  const list = H.filter(r => (!f || r.verdict === f) &&
+    (!q || [r.id, r.model, r.op, ...pend(r).map(i => i.n + ' ' + i.d)].join(' ').toLowerCase().includes(q)));
+  S.hlist = list;
+  const today = new Date().toDateString(), td = H.filter(r => new Date(r.ts).toDateString() === today);
+  const cnt = v => td.filter(r => r.verdict === v).length;
+  $('#hstats').innerHTML = `Hoje: <b>${td.length}</b> testados · <b>${cnt('APROVADO')}</b> aprovados · <b>${cnt('APROVADO COM RESSALVAS')}</b> com ressalvas · <b>${cnt('INCOMPLETO')}</b> incompletos · <b>${cnt('REPROVADO')}</b> reprovados`;
+  $('#hbody').innerHTML = list.map((r, k) => {
+    const p = pend(r).map(i => `${i.n}: ${i.d}`).join(' · ');
+    return `<tr class="click" data-h="${k}"><td>${fmtDate(r.ts)}</td><td><b>${esc(r.id)}</b></td><td>${esc(r.model)}</td><td>${esc(r.op || '—')}</td>
+      <td><span class="pill ${vclass(r.verdict)}">${r.verdict}</span></td><td>${batteryCell(r)}</td><td class="probcell">${esc(p) || '—'}</td></tr>`;
+  }).join('') || '<tr><td colspan="7" class="empty">Nenhum teste encontrado.</td></tr>';
+}
+function exportCSV() {
+  const rows = [['Data','ID','Modelo','Conexão','Operador','Resultado','Bateria %','Saúde bateria (bancada)','Falhas','Atenção','Não testado']];
+  for (const r of S.hlist || []) {
+    const j = st => r.items.filter(i => i.st === st).map(i => `${i.n}: ${i.d}`).join(' | ');
+    const bh = benchLatest(r.id);
+    rows.push([fmtDate(r.ts), r.id, r.model, r.conn || '', r.op || '', r.verdict, r.batt ?? '',
+               bh ? `${bh.verdict}${bh.health != null ? ' (' + pct(bh.health) + ')' : ''}` : '', j('fail'), j('warn'), j('miss')]);
+  }
+  const csv = '﻿' + rows.map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(';')).join('\r\n');
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([csv], {type: 'text/csv;charset=utf-8'}));
+  a.download = `testes-controles-${new Date().toISOString().slice(0, 10)}.csv`; a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+}
+
+// ---------- views, teclado, cliques ----------
+function showView(v) {
+  S.view = v;
+  $('#view-test').hidden = v !== 'test'; $('#view-report').hidden = v !== 'report'; $('#view-history').hidden = v !== 'history';
+  $('#view-bench').hidden = v !== 'bench';
+  document.querySelectorAll('nav button').forEach(b => {
+    b.classList.toggle('active', b.dataset.view === v || (v === 'report' && b.dataset.view === (S.reportFromHist ? 'history' : 'test')));
+    b.disabled = S.mode === 'test';
+  });
+  if (v === 'history') renderHistory();
+  if (v === 'bench') benchOpen().then(benchRender);
+}
+function handleKey(k) {
+  initAudio();
+  if (S.view === 'report') {
+    if (k === 'p') return window.print();
+    if (S.reportFromHist) { if (k === 'escape') showView('history'); return; }
+    if (k === 'enter') showStart();
+    else if (k === 'r' && S.lastRec) { S.mode = 'idle'; showView('test'); startTest(true, S.lastRec.id); }
+    return;
+  }
+  if (S.view !== 'test') return;
+  if (S.mode === 'idle') { if (k === 'enter') startTest(true); return; }
+  if (S.mode !== 'test') return;
+  if (S.calib) return calibKey(k);
+  if (k === 'calib') return openCalib();
+  if (S.confirm) {
+    if (k === 'enter') finalize(true);
+    else if (k === 'escape') { S.confirm = false; $('#confirm').hidden = true; }
+    return;
+  }
+  if (k === 'escape') { if (confirm('Cancelar este teste? O que foi registrado será descartado.')) cancelTest(); return; }
+  if (S.paused) return;
+  if (k === 'enter') return finalize(false);
+  const [act, motor] = k.split(':');
+  const m = MOTORS.find(x => x[0] === motor);
+  if (!m) return;
+  if (act === 'v') { doRumble(m[2], m[3], 800); logEv(`${m[1]}: vibração enviada`); }
+  else if (act === 'y') setRumble(motor, true);
+  else if (act === 'n') setRumble(motor, false);
+}
+document.addEventListener('keydown', e => {
+  const k = e.key.toLowerCase();
+  if (e.target.tagName === 'BUTTON' && (k === 'enter' || k === ' ')) return;
+  if (e.target.matches('input,select') && !(k === 'enter' && e.target.id === 'cid')) return;
+  if (k === 'enter') e.preventDefault();
+  handleKey(k);
+});
+document.addEventListener('click', e => {
+  initAudio();
+  const b = e.target.closest('[data-k]');
+  if (b && !b.disabled) { b.blur(); handleKey(b.dataset.k); return; }
+  const nv = e.target.closest('nav button');
+  if (nv && !nv.disabled) { if (nv.dataset.view === 'test') showStart(); else showView(nv.dataset.view); return; }
+  const bb = e.target.closest('[data-b]');
+  if (bb && !bb.disabled) { const [act, n] = bb.dataset.b.split(':'); benchAction(act, +n); return; }
+  const tr = e.target.closest('tr[data-h]');
+  if (tr) renderReport(S.hlist[+tr.dataset.h], true);
+});
+$('#hq').addEventListener('input', renderHistory);
+$('#hf').addEventListener('change', renderHistory);
+$('#hcsv').addEventListener('click', exportCSV);
+$('#hclr').addEventListener('click', () => { if (confirm('Apagar todo o histórico deste computador?')) { store.set('ctrltest.hist', []); renderHistory(); } });
+$('#op').value = store.get('ctrltest.op', '');
+$('#op').addEventListener('input', e => store.set('ctrltest.op', e.target.value));
+
+// ---------- loop principal ----------
+let lastInfo = 0;
+function frame(now) {
+  requestAnimationFrame(frame);
+  try {
+    const gp = pickPad();
+    if (now - lastInfo > 200) { lastInfo = now; updateInfo(); refreshStart(); }
+    if (!gp) return;
+    const pressed = gp.buttons.map(b => b.pressed || b.value > 0.5), down = new Set(), up = new Set();
+    for (let i = 0; i < pressed.length; i++) {
+      const was = !!S.prev[i];
+      if (pressed[i] && !was) { down.add(i); if (S.lastUp[i] != null && now - S.lastUp[i] < CFG.chatterGapMs) noteChatter('poll', i); }
+      else if (!pressed[i] && was) { up.add(i); S.lastUp[i] = now; }
+    }
+    S.prev = pressed;
+    drawLive(gp, pressed);
+    if (S.mode === 'test') { if (!S.paused) tickSession({gp, now, down, up}); }
+    else if (S.mode === 'idle' && S.view === 'test' && down.has(0)) startTest(false);
+    else if (S.mode === 'report' && S.view === 'report' && !S.reportFromHist && down.has(0) && now - S.reportAt > 600) showStart();
+  } catch (e) { console.error(e); }
+}
+
+['LX','LY','RX','RY','LT','RT'].forEach(k => RO[k] = $('#r' + k));
+readColors();
+buildPad('generic');
+if (!navigator.getGamepads) stage('<h2>Navegador sem suporte</h2><p class="lead">Abra este arquivo no Google Chrome ou Microsoft Edge.</p>');
+else { showStart(); requestAnimationFrame(frame); }
+</script>
+</body>
+</html>

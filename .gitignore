@@ -1,0 +1,10 @@
+# Credenciais do clasp e do Google (nunca versionar)
+.clasprc.json
+creds.json
+client_secret*.json
+
+# Dependências e temporários
+node_modules/
+*.log
+.DS_Store
+Thumbs.db
