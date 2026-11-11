@@ -42,6 +42,8 @@ h3{margin:0 0 10px;font-size:13px;color:var(--muted);font-weight:600;text-transf
 .btn.sel-bad{background:rgba(239,68,68,.2);border-color:var(--bad)}
 kbd{font:11px ui-monospace,Consolas,monospace;padding:1px 6px;border-radius:5px;border:1px solid currentColor;opacity:.75;margin-left:6px}
 .hint{min-height:22px;color:var(--warn);font-weight:600;margin:8px 0}
+.osbar{display:flex;flex-wrap:wrap;gap:8px 14px;align-items:center;justify-content:space-between;margin:0 0 14px;padding:10px 14px;border-radius:10px;border:1px solid var(--line);border-left:5px solid var(--accent);background:var(--panel2)}
+.osbar a{color:var(--accent);font-weight:600;text-decoration:none}
 .field{display:flex;flex-direction:column;gap:6px;margin:6px 0 4px}
 .field span{font-size:13px;color:var(--muted)}
 .field input{font-size:20px;padding:12px 14px}
@@ -278,6 +280,32 @@ const BATT_ERR = {0xa: 'voltagem anormal', 0xb: 'temperatura anormal', 0xf: 'err
 const ICON = {ok: '✓', warn: '!', fail: '✕', na: '–', miss: '?'};
 const STLABEL = {ok: 'OK', warn: 'Atenção', fail: 'Falha', na: 'N/D', miss: 'Não testado'};
 const RANK = {ok: 0, na: 0, miss: 1, warn: 2, fail: 3};
+// Aberto pela OS do app de Manutenção: ?codigo=&os=&op=&retorno=. O laudo volta só para script.google.com.
+const OSP = (() => {
+  try {
+    const q = new URLSearchParams(location.search), ret = q.get('retorno') || '';
+    return q.get('os') && /^https:\/\/script\.google\.com\//.test(ret)
+      ? {codigo: (q.get('codigo') || '').trim(), os: q.get('os'), op: q.get('op') || '', retorno: ret} : null;
+  } catch (e) { return null; }
+})();
+const normCod = c => String(c || '').trim().replace(/^0+/, '');
+const osUrl = extra => OSP.retorno + (OSP.retorno.indexOf('?') >= 0 ? '&' : '?') + extra;
+const osBar = () => OSP ? `<div class="osbar"><span>🛠️ <b>OS ${esc(OSP.os)}</b> · item ${esc(OSP.codigo)} — ao terminar, envie o laudo para a OS</span>` +
+  `<a href="${esc(osUrl('codigo=' + encodeURIComponent(OSP.codigo)))}">↩ Voltar para a OS sem laudo</a></div>` : '';
+// Laudo resumido na URL de volta (defeitos, o que faltou testar, veredito)
+function enviarParaOS(rec) {
+  if (!OSP || !rec) return;
+  const probs = rec.items.filter(i => i.st === 'fail' || i.st === 'warn').sort((a, b) => RANK[b.st] - RANK[a.st]);
+  const miss = rec.items.filter(i => i.st === 'miss');
+  let corte = 90, url = '';
+  do {
+    const laudo = {ts: rec.ts, id: rec.id, v: rec.verdict, m: rec.model, b: rec.batt,
+      d: probs.slice(0, 25).map(p => ({n: p.n, d: String(p.d || '').slice(0, corte), st: p.st})), f: miss.slice(0, 25).map(m => m.n)};
+    url = osUrl('os=' + encodeURIComponent(OSP.os) + '&laudo=' + encodeURIComponent(JSON.stringify(laudo)));
+    corte -= 30;
+  } while (url.length > 6000 && corte > 0);
+  location.href = url;
+}
 const MOTORS = [['forte', 'Motor forte', 1, 0], ['fraco', 'Motor fraco', 0, 1]];
 
 const S = {
@@ -1158,6 +1186,9 @@ function renderReport(rec, fromHist) {
     <div class="panel" style="margin-bottom:16px"><h3>Botões — ${okB} de ${rec.btns.length} OK</h3>
       <div class="bgrid">${rec.btns.map(b => `<span class="bchip ${b.st}">${esc(b.l)}<small>${b.n || ''}</small></span>`).join('')}</div></div>
     <div class="panel"><h3>Todas as verificações</h3><table class="tbl"><tbody>${rows}</tbody></table></div>
+    ${!fromHist && OSP ? (normCod(rec.id) === normCod(OSP.codigo)
+      ? `<div class="osbar noprint"><span>🛠️ OS ${esc(OSP.os)}</span><button class="btn primary" data-k="o">↩ Enviar laudo para a OS <kbd>O</kbd></button></div>`
+      : `<div class="osbar noprint"><span>⚠️ O ID testado (${esc(rec.id)}) não é o item da OS (${esc(OSP.codigo)}): o laudo não pode ir para ela. Refaça com o código da OS.</span></div>`) : ''}
     <div class="actions noprint">
       ${fromHist ? '<button class="btn" data-k="escape">Voltar <kbd>Esc</kbd></button>'
                  : `<button class="btn primary" data-k="enter">Próximo controle <kbd>Enter / ${esc(lab(0, rec.fam))}</kbd></button><button class="btn" data-k="r">Refazer teste <kbd>R</kbd></button>`}
@@ -1168,13 +1199,14 @@ function renderReport(rec, fromHist) {
 // ---------- tela inicial ----------
 function showStart() {
   S.mode = 'idle'; S.T = null; showView('test'); padReset();
-  stage(`<h2 id="sTitle"></h2>
+  stage(`${osBar()}<h2 id="sTitle"></h2>
     <p class="lead" id="sLead"></p>
     <label class="field"><span>ID / código do controle</span><input id="cid" autocomplete="off" spellcheck="false" placeholder="Bipe ou digite — opcional"></label>
     <p class="hint" id="hint"></p>
     <p class="lead" style="margin:6px 0 0">Durante o teste, o app registra sozinho:</p>
     <ul class="plan"><li>Botões que não respondem</li><li>Falso contato / clique falhando</li><li>Botão preso ou acionando outro</li><li>Drift e retorno ao centro</li><li>Curso dos analógicos e gatilhos</li><li>Vibração, bateria e sensores (PS)</li><li>Tudo que ficou sem testar</li></ul>
     <div class="actions"><button class="btn primary" id="go" data-k="enter">Iniciar teste <kbd>Enter</kbd></button></div>`);
+  if (OSP) { $('#cid').value = OSP.codigo; if (OSP.op && !$('#op').value.trim()) $('#op').value = OSP.op; }
   setTimeout(() => $('#cid')?.focus(), 0);
   refreshStart();
 }
@@ -1450,6 +1482,7 @@ function handleKey(k) {
   if (S.view === 'report') {
     if (k === 'p') return window.print();
     if (S.reportFromHist) { if (k === 'escape') showView('history'); return; }
+    if (k === 'o' && OSP && S.lastRec && normCod(S.lastRec.id) === normCod(OSP.codigo)) return enviarParaOS(S.lastRec);
     if (k === 'enter') showStart();
     else if (k === 'r' && S.lastRec) { S.mode = 'idle'; showView('test'); startTest(true, S.lastRec.id); }
     return;
