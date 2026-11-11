@@ -107,6 +107,9 @@ canvas{max-width:100%;height:auto;display:block;margin:0 auto}
 .cmp th{color:var(--muted);font-size:13px;font-weight:600}
 .cmp td.good{color:var(--ok);font-weight:700}
 .cmp td.bad{color:var(--warn);font-weight:700}
+#xstat{text-align:left;font-weight:600}
+#xstat.good{color:var(--ok)}
+#xstat.bad{color:var(--warn)}
 .spin{display:inline-block;width:16px;height:16px;border:2px solid var(--line);border-top-color:var(--accent);border-radius:50%;animation:rot .8s linear infinite;vertical-align:-3px;margin-right:8px}
 @keyframes rot{to{transform:rotate(360deg)}}
 /* bancada de bateria */
@@ -359,6 +362,8 @@ function secName(k) {
 function detect(id) {
   const s = id.toLowerCase();
   const vid = (s.match(/vendor:\s*([0-9a-f]{4})/) || [])[1], pid = (s.match(/product:\s*([0-9a-f]{4})/) || [])[1];
+  // Xbox primeiro: o Series no Bluetooth se chama "Xbox Wireless Controller" e cairia no teste de "wireless controller" do PS4
+  if (vid === '045e' || /xinput|xbox/.test(s)) return {fam: 'xbox', model: 'Controle Xbox'};
   if (vid === '054c' || /dualsense|dualshock|wireless controller/.test(s)) {
     if (pid === '0df2' || /edge/.test(s)) return {fam: 'ps', model: 'DualSense Edge (PS5)'};
     if (pid === '0ce6' || /dualsense/.test(s)) return {fam: 'ps', model: 'DualSense (PS5)'};
@@ -366,7 +371,6 @@ function detect(id) {
     if (pid === '0268' || /playstation\(r\)3|dualshock ?3|sixaxis/.test(s)) return {fam: 'ps', model: 'DualShock 3 (PS3)', ps3: true};
     return {fam: 'ps', model: 'Controle PlayStation'};
   }
-  if (vid === '045e' || /xinput|xbox/.test(s)) return {fam: 'xbox', model: 'Controle Xbox'};
   return {fam: 'generic', model: 'Controle genérico'};
 }
 
@@ -466,6 +470,7 @@ function padChanged(gp) {
   S.padIndex = gp.index; S.padId = gp.id;
   S.prev = gp.buttons.map(b => b.pressed || b.value > 0.5); S.lastUp = [];
   if (S.mode === 'test') {
+    if (S.calib && S.calib.phase === 'xbox') { logEv('Controle voltou com o driver padrão'); xboxCalStatus(); return; }
     if (S.paused) { S.paused = false; $('#pause').hidden = true; logEv('Controle reconectado'); }
     return;
   }
@@ -477,6 +482,7 @@ function padChanged(gp) {
 function padLost() {
   S.padIndex = null; S.padId = null;
   if (S.mode === 'test') {
+    if (S.calib && S.calib.phase === 'xbox') { logEv('Controle saiu do navegador (troca de driver)'); xboxCalStatus(); return; }
     if (!S.paused) {
       S.paused = true; S.T.disconnects++; S.T.discAt = S.hidConn === 'bt' ? performance.now() : null;
       logEv('Controle desconectado', true); $('#pause').hidden = false; beep(false);
@@ -674,38 +680,61 @@ function openCalib() {
     <p class="mini" style="text-align:left">Não conserta desgaste físico: se o módulo do analógico estiver gasto, o drift volta. Nesse caso o laudo indica troca.</p>
     <div class="actions"><button class="btn primary" data-k="enter">Calibrar <kbd>Enter</kbd></button><button class="btn" data-k="escape">Cancelar <kbd>Esc</kbd></button></div>`);
 }
-// Xbox: a calibração só é acessível pelo app oficial "Acessórios do Xbox"; aqui guiamos e medimos antes/depois.
-const XBOX_APP = 'ms-windows-store://pdp/?productid=9NBLGGH30XJ3';
+// Xbox: calibração feita no DriftGuard (WebUSB, exige o driver WinUSB); aqui guiamos e medimos antes/depois.
+// Com o WinUSB o controle some do navegador como gamepad, então a saída dele nesta fase não conta como queda.
+const XBOX_CAL_URL = 'https://driftguard.app/#dashboard';
+const ZADIG_URL = 'https://zadig.akeo.ie/';
 function sessionDrift(s) { return s.eps.length ? median(s.eps.map(e => e.off)) : NaN; }
+function xboxCalStatus() {
+  const el = $('#xstat');
+  if (!el) return;
+  const on = S.padIndex != null;
+  el.className = 'mini ' + (on ? 'good' : 'bad');
+  el.textContent = on ? 'Controle visível aqui (driver padrão do Xbox).' : 'Controle não aparece aqui — normal enquanto estiver com o WinUSB.';
+}
 function openXboxCalib() {
   const T = S.T;
-  S.calib = {phase: 'xbox', before: {L: {off: sessionDrift(T.st.L)}, R: {off: sessionDrift(T.st.R)}}};
+  if (!S.calib || S.calib.phase !== 'xbox')
+    S.calib = {phase: 'xbox', before: {L: {off: sessionDrift(T.st.L)}, R: {off: sessionDrift(T.st.R)}}};
   calibUI(`<h2>Corrigir drift — Xbox</h2>
-    <p class="lead">A calibração do Xbox não é acessível pelo navegador. Ela é feita pelo app oficial <b>Acessórios do Xbox</b> (Xbox Wireless Controller e Elite Series 2).</p>
+    <p class="lead">A calibração é feita no <b>DriftGuard</b>, com o controle no <b>cabo USB</b>. Ele grava na memória do controle.</p>
     <ol class="misslist">
-      <li>Abra o app <b>Acessórios do Xbox</b> com o controle conectado (USB).</li>
-      <li>Se ele oferecer atualização de firmware, atualize primeiro.</li>
-      <li>Nas opções do controle, procure <b>Recalibrar</b> e siga as instruções para cada analógico.</li>
-      <li>Volte aqui, <b>solte o controle na mesa</b> e clique em "Medir de novo".</li>
+      <li><b>Troque o driver para WinUSB:</b> clique em <b>"Modo calibrar"</b> abaixo e aceite as permissões. Na primeira vez de cada modelo, use o Zadig: Options → List All Devices, escolha o controle Xbox (USB ID começando com <b>045E</b>), <b>WinUSB</b> → Replace Driver. O controle vai sumir desta tela — é esperado.</li>
+      <li>Abra o DriftGuard, conecte o controle, calibre os analógicos e <b>salve</b>. Feche a aba do DriftGuard. Não use a opção "Series conversion".</li>
+      <li><b>Volte o driver padrão:</b> clique em <b>"Modo teste"</b> abaixo. Não apague o driver pelo Gerenciador de Dispositivos — o atalho "Modo calibrar" precisa dele na próxima vez.</li>
+      <li>Quando o controle voltar aqui, <b>solte-o na mesa</b> e clique em "Medir de novo".</li>
     </ol>
+    <p id="xstat" class="mini"></p>
     <div class="actions">
-      <button class="btn" data-k="store">Abrir Acessórios do Xbox</button>
-      <button class="btn primary" data-k="enter">Já recalibrei — medir de novo <kbd>Enter</kbd></button>
+      <button class="btn" data-k="drv-calibrar">1. Modo calibrar</button>
+      <button class="btn" data-k="site">2. Abrir DriftGuard</button>
+      <button class="btn" data-k="drv-teste">3. Modo teste</button>
+    </div>
+    <p class="mini" style="text-align:left">Se os botões de modo não fizerem nada, rode uma vez neste PC o arquivo "Instalar botoes no app" da pasta driver-xbox.</p>
+    <div class="actions">
+      <button class="btn" data-k="zadig">Baixar Zadig</button>
+      <button class="btn primary" data-k="enter">Já calibrei — medir de novo <kbd>Enter</kbd></button>
       <button class="btn" data-k="escape">Cancelar <kbd>Esc</kbd></button>
     </div>`);
+  xboxCalStatus();
 }
 async function remeasureXbox() {
   const C = S.calib, T = S.T;
+  if (S.padIndex == null) {
+    logEv('O controle ainda não voltou — volte o driver padrão (passo 3) e plugue de novo', true);
+    return;
+  }
   C.phase = 'run';
   calibUI(`<h2>Corrigir drift — Xbox</h2><p class="lead"><span class="spin"></span>Medindo o drift depois da recalibração…</p><p class="mini" style="text-align:left">Não toque no controle.</p>`);
   C.after = await measureRest(1500);
   if (C.after.L.std > 0.02 || C.after.R.std > 0.02) {
     logEv('Medição após recalibrar: analógicos se mexendo — solte o controle e meça de novo', true);
+    C.phase = 'xbox';
     return openXboxCalib();
   }
-  T.calib = {before: {L: C.before.L.off, R: C.before.R.off}, after: {L: C.after.L.off, R: C.after.R.off}, saved: true, via: 'Acessórios do Xbox'};
+  T.calib = {before: {L: C.before.L.off, R: C.before.R.off}, after: {L: C.after.L.off, R: C.after.R.off}, saved: true, via: 'DriftGuard'};
   T.st.L.eps = []; T.st.L.cur = null; T.st.R.eps = []; T.st.R.cur = null;
-  logEv(`Drift após recalibrar no app Xbox: esq ${f3(C.after.L.off)}, dir ${f3(C.after.R.off)}`);
+  logEv(`Drift após recalibrar no DriftGuard:esq ${f3(C.after.L.off)}, dir ${f3(C.after.R.off)}`);
   C.phase = 'done';
   const cell = (a, b) => `<td>${f3(a)}</td><td class="${b <= CFG.drift.warn ? 'good' : 'bad'}">${f3(b)}</td>`;
   const still = [C.after.L, C.after.R].some(s => s.off > CFG.drift.warn);
@@ -778,7 +807,9 @@ async function finishCalib(save) {
 function calibKey(k) {
   const p = S.calib.phase;
   if (p === 'xbox') {
-    if (k === 'store') window.open(XBOX_APP);
+    if (k === 'site') window.open(XBOX_CAL_URL, '_blank', 'noopener');
+    else if (k === 'zadig') window.open(ZADIG_URL, '_blank', 'noopener');
+    else if (k.startsWith('drv-')) { location.href = 'ctrltest-driver:' + k.slice(4); logEv(`Pedido ao Windows: modo ${k.slice(4)} do driver`); }
     else if (k === 'enter') remeasureXbox();
     else if (k === 'escape') closeCalib();
   }
@@ -993,7 +1024,7 @@ function renderLive(gp, now) {
     S._calwhy = why;
     $('#calbtn').disabled = !!why;
     $('#calwhy').textContent = why ? `Indisponível: ${why}.`
-      : S.fam === 'xbox' ? 'Recalibração pelo app Acessórios do Xbox, com medição antes e depois aqui.'
+      : S.fam === 'xbox' ? 'Recalibração pelo DriftGuard, com medição antes e depois aqui.'
       : 'Recalibra o centro dos dois analógicos na memória do controle.';
   }
   for (const i of Object.keys(T.tr)) {
