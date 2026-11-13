@@ -132,6 +132,15 @@ canvas{max-width:100%;height:auto;display:block;margin:0 auto}
 .bgrid{display:flex;flex-wrap:wrap;gap:6px}
 .bchip{padding:6px 10px;border-radius:8px;font-weight:600;border:1px solid var(--line);min-width:46px;text-align:center;font-size:14px;color:var(--muted)}
 .bchip small{margin-left:6px;font-weight:700;opacity:.8}
+.mgrid,.msub{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.msub{margin-top:12px}
+.mchip{cursor:pointer;padding:8px 14px;border-radius:999px;border:1px solid var(--line);background:transparent;color:var(--text);font:inherit;font-size:14px}
+.mchip.sm{padding:5px 11px;font-size:13px}
+.mchip.on{border-color:var(--accent);background:rgba(96,165,250,.15)}
+.mchip.warn{border-color:var(--warn);color:var(--warn);background:rgba(245,158,11,.12)}
+.mchip.fail{border-color:var(--bad);color:#fca5a5;background:rgba(239,68,68,.15)}
+.mchip a{margin-left:6px;cursor:pointer;opacity:.8}
+#mout{flex:1;min-width:220px;padding:8px 12px;border-radius:10px;border:1px solid var(--line);background:transparent;color:var(--text);font:inherit}
 .bchip.part{border-color:var(--accent);color:var(--text)}
 .bchip.ok{border-color:rgba(34,197,94,.5);color:var(--ok);background:rgba(34,197,94,.08)}
 .bchip.warn{border-color:var(--warn);color:var(--warn);background:rgba(245,158,11,.1)}
@@ -307,7 +316,8 @@ const osVoltaSemLaudo = () => osUrl(OSP.tipo === 'compra' ? OSP.volta('') : 'cod
 const osBar = () => OSP ? `<div class="osbar"><span>${OSP.icone} <b>${esc(OSP.rotulo)}</b> · ${OSP.nome ? esc(OSP.nome) + ' · ' : ''}item ${esc(OSP.codigo)} — ao terminar, envie o laudo para ${OSP.destino}</span>` +
   `<a href="${esc(osVoltaSemLaudo())}">↩ Voltar sem laudo</a></div>` : '';
 // Laudo resumido na URL de volta (defeitos, o que faltou testar, veredito).
-// g = grupo do item e x = valor medido (drift), usados pelo app de Compras para achar o sintoma da tabela de descontos.
+// g = grupo do item, x = valor medido (drift) e k = chave da checagem manual, usados pelo app de Compras
+// para achar o sintoma da tabela de descontos.
 function enviarParaOS(rec) {
   if (!OSP || !rec) return;
   const probs = rec.items.filter(i => i.st === 'fail' || i.st === 'warn').sort((a, b) => RANK[b.st] - RANK[a.st]);
@@ -315,7 +325,7 @@ function enviarParaOS(rec) {
   let corte = 90, url = '';
   do {
     const laudo = {ts: rec.ts, id: rec.id, v: rec.verdict, m: rec.model, b: rec.batt, fam: rec.fam,
-      d: probs.slice(0, 25).map(p => ({n: p.n, g: p.g, d: String(p.d || '').slice(0, corte), st: p.st, ...(p.x != null ? {x: +p.x.toFixed(3)} : {})})),
+      d: probs.slice(0, 25).map(p => ({n: p.n, g: p.g, d: String(p.d || '').slice(0, corte), st: p.st, ...(p.x != null ? {x: +p.x.toFixed(3)} : {}), ...(p.k ? {k: p.k} : {})})),
       f: miss.slice(0, 25).map(m => m.n)};
     url = osUrl(OSP.volta('&laudo=' + encodeURIComponent(JSON.stringify(laudo))));
     corte -= 30;
@@ -1188,9 +1198,7 @@ function finalize(force) {
     return;
   }
   $('#confirm').hidden = true; S.confirm = false;
-  const verdict = items.some(i => i.st === 'fail') ? 'REPROVADO'
-    : miss.length ? 'INCOMPLETO'
-    : items.some(i => i.st === 'warn') ? 'APROVADO COM RESSALVAS' : 'APROVADO';
+  const verdict = veredito(items);
   const rec = {
     id: T.id, ts: T.start, dur: Date.now() - T.start, op: T.op, model: T.model, fam: T.fam,
     conn: T.hidUsed ? S.hidConn : null, verdict, items, batt: T.batt ? T.batt.pct : null,
@@ -1202,6 +1210,74 @@ function finalize(force) {
   $('#feed').innerHTML = '';
   beep(verdict === 'APROVADO' || verdict === 'APROVADO COM RESSALVAS', verdict === 'APROVADO' ? 1046 : undefined);
   renderReport(rec, false);
+}
+
+// ---------- checagem manual (defeitos que o teste não mede: o operador marca no laudo) ----------
+const veredito = items => items.some(i => i.st === 'fail') ? 'REPROVADO'
+  : items.some(i => i.st === 'miss') ? 'INCOMPLETO'
+  : items.some(i => i.st === 'warn') ? 'APROVADO COM RESSALVAS' : 'APROVADO';
+const MAN_GRUPO = 'Checagem manual';
+const MAN_OPC = {
+  borracha: ['Analógico esquerdo', 'Analógico direito', 'Membrana dos botões', 'Gatilhos'],
+  analogicos: ['Esquerdo', 'Direito'],
+  pecas: ['Tampa da pilha', 'Capa do analógico', 'Botão', 'Mola do gatilho', 'Parte da carcaça'],
+};
+// k = chave lida pelo app de Compras (LaudoSintomasMapeador.MANUAL); qual = o operador escolhe onde (botões vêm do controle testado)
+const MANUAIS = [
+  {k: 'BORRACHA', n: 'Troca de borracha', st: 'warn', qual: 'borracha'},
+  {k: 'CARCACA', n: 'Carcaça danificada', st: 'warn'},
+  {k: 'FERRUGEM', n: 'Ferrugem / oxidação', st: 'fail'},
+  {k: 'BOTAO_FROUXO', n: 'Botão frouxo', st: 'warn', qual: 'botoes'},
+  {k: 'BOTAO_DURO', n: 'Botão duro / afundado', st: 'warn', qual: 'botoes'},
+  {k: 'TRAVADINHA', n: 'Analógico travadinha', st: 'warn', qual: 'analogicos'},
+  {k: 'PECA_FALTANDO', n: 'Peça faltando', st: 'warn', qual: 'pecas'},
+  {k: 'LED', n: 'LED / luz queimada', st: 'warn'},
+  {k: 'SINCRONIA', n: 'Não sincroniza sem fio', st: 'fail'},
+  {k: 'VAZAMENTO_PILHA', n: 'Vazamento de pilha', st: 'fail'},
+  {k: 'SUJEIRA', n: 'Sujeira excessiva', st: 'warn'},
+];
+const manDef = k => MANUAIS.find(m => m.k === k);
+const manOpcoes = (m, fam) => !m || !m.qual ? [] : m.qual === 'botoes' ? (LABELS[fam] || LABELS.generic) : (MAN_OPC[m.qual] || []);
+// rec.manual = [{k, n, st, sel: [onde]}]; vira itens do laudo no grupo "Checagem manual" e entra no veredito
+function aplicarManual(rec) {
+  rec.items = rec.items.filter(i => !i.manual).concat((rec.manual || []).map(m =>
+    ({g: MAN_GRUPO, n: m.n, st: m.st, d: m.sel.join(', '), k: m.k, manual: true})));
+  rec.verdict = veredito(rec.items);
+  const H = store.get('ctrltest.hist', []), i = H.findIndex(h => h.ts === rec.ts && h.id === rec.id);
+  if (i >= 0) { H[i] = rec; store.set('ctrltest.hist', H); }
+}
+function manualHtml(rec) {
+  const man = rec.manual || [];
+  const chips = MANUAIS.map(m => { const on = man.some(x => x.k === m.k);
+    return `<button class="mchip ${on ? m.st : ''}" data-m="t:${m.k}">${on ? '✓ ' : ''}${esc(m.n)}</button>`; }).join('');
+  const subs = man.map(x => ({x, m: manDef(x.k)})).filter(o => o.m && o.m.qual).map(({x, m}) =>
+    `<div class="msub"><b>${esc(m.n)} — qual?</b>${manOpcoes(m, rec.fam).map((o, j) =>
+      `<button class="mchip sm ${x.sel.includes(o) ? 'on' : ''}" data-m="s:${m.k}:${j}">${esc(o)}</button>`).join('')}</div>`).join('');
+  const outros = man.map((x, i) => x.k === 'OUTRO' ? `<span class="mchip fail">${esc(x.n)}<a data-m="x:${i}" title="Tirar">✕</a></span>` : '').join('');
+  return `<div class="panel noprint" style="margin-bottom:16px"><h3>Checagem manual — toque no que encontrar</h3>
+    <div class="mgrid">${chips}</div>${subs}
+    <div class="msub"><input id="mout" placeholder="Outro defeito — descreva e tecle Enter" autocomplete="off"><button class="btn sm" data-m="o">＋ Adicionar</button></div>
+    ${outros ? `<div class="msub">${outros}</div>` : ''}</div>`;
+}
+function manualAcao(cmd) {
+  const rec = S.lastRec;
+  if (!rec || S.view !== 'report' || S.reportFromHist) return;
+  const man = rec.manual || (rec.manual = []), [a, k, j] = cmd.split(':');
+  if (a === 't') {
+    const i = man.findIndex(x => x.k === k), m = manDef(k);
+    if (i >= 0) man.splice(i, 1); else if (m) man.push({k, n: m.n, st: m.st, sel: []});
+  } else if (a === 's') {
+    const x = man.find(y => y.k === k), o = manOpcoes(manDef(k), rec.fam)[+j];
+    if (!x || o == null) return;
+    x.sel = x.sel.includes(o) ? x.sel.filter(v => v !== o) : x.sel.concat(o);
+  } else if (a === 'o') {
+    const t = ($('#mout')?.value || '').trim();
+    if (!t) return;
+    man.push({k: 'OUTRO', n: t.slice(0, 80), st: 'fail', sel: []});
+  } else if (a === 'x') man.splice(+k, 1);
+  aplicarManual(rec);
+  const y = scrollY; renderReport(rec, false); scrollTo(0, y);
+  if (a === 'o') $('#mout')?.focus();
 }
 
 // ---------- laudo ----------
@@ -1227,6 +1303,7 @@ function renderReport(rec, fromHist) {
       <div class="panel"><h3>Defeitos encontrados</h3>${probs.length ? list(probs) : '<p class="none">✓ Nenhum defeito encontrado.</p>'}</div>
       <div class="panel"><h3>Faltou testar</h3>${miss.length ? list(miss) : '<p class="none">✓ Todos os itens foram testados.</p>'}</div>
     </div>
+    ${fromHist ? '' : manualHtml(rec)}
     <div class="panel" style="margin-bottom:16px"><h3>Botões — ${okB} de ${rec.btns.length} OK</h3>
       <div class="bgrid">${rec.btns.map(b => `<span class="bchip ${b.st}">${esc(b.l)}<small>${b.n || ''}</small></span>`).join('')}</div></div>
     <div class="panel"><h3>Todas as verificações</h3><table class="tbl"><tbody>${rows}</tbody></table></div>
@@ -1553,6 +1630,7 @@ function handleKey(k) {
 }
 document.addEventListener('keydown', e => {
   const k = e.key.toLowerCase();
+  if (e.target.id === 'mout') { if (k === 'enter') { e.preventDefault(); manualAcao('o'); } return; }
   if (e.target.tagName === 'BUTTON' && (k === 'enter' || k === ' ')) return;
   if (e.target.matches('input,select') && !(k === 'enter' && e.target.id === 'cid')) return;
   if (k === 'enter') e.preventDefault();
@@ -1560,6 +1638,8 @@ document.addEventListener('keydown', e => {
 });
 document.addEventListener('click', e => {
   initAudio();
+  const mm = e.target.closest('[data-m]');
+  if (mm) { manualAcao(mm.dataset.m); return; }
   const b = e.target.closest('[data-k]');
   if (b && !b.disabled) { b.blur(); handleKey(b.dataset.k); return; }
   const nv = e.target.closest('nav button');
