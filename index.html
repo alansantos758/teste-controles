@@ -1237,6 +1237,8 @@ const MANUAIS = [
   {k: 'SUJEIRA', n: 'Sujeira excessiva', st: 'warn'},
 ];
 const manDef = k => MANUAIS.find(m => m.k === k);
+// Checagem em andamento (algo marcado ou digitando "outro"): o botão A do controle não sai do laudo, só Enter/clique.
+const manualAberta = () => !!((S.lastRec && S.lastRec.manual && S.lastRec.manual.length) || document.activeElement?.id === 'mout');
 const manOpcoes = (m, fam) => !m || !m.qual ? [] : m.qual === 'botoes' ? (LABELS[fam] || LABELS.generic) : (MAN_OPC[m.qual] || []);
 // rec.manual = [{k, n, st, sel: [onde]}]; vira itens do laudo no grupo "Checagem manual" e entra no veredito
 function aplicarManual(rec) {
@@ -1312,7 +1314,8 @@ function renderReport(rec, fromHist) {
       : `<div class="osbar noprint"><span>⚠️ O ID testado (${esc(rec.id)}) não é o item esperado (${esc(OSP.codigo)}): o laudo não pode ir para ${OSP.destino}. Refaça com o código informado.</span></div>`) : ''}
     <div class="actions noprint">
       ${fromHist ? '<button class="btn" data-k="escape">Voltar <kbd>Esc</kbd></button>'
-                 : `<button class="btn primary" data-k="enter">Próximo controle <kbd>Enter / ${esc(lab(0, rec.fam))}</kbd></button><button class="btn" data-k="r">Refazer teste <kbd>R</kbd></button>`}
+                 : `<button class="btn primary" data-k="enter">Próximo controle <kbd>Enter${manualAberta() ? '' : ' / ' + esc(lab(0, rec.fam))}</kbd></button><button class="btn" data-k="r">Refazer teste <kbd>R</kbd></button>
+                    ${manualAberta() ? `<span class="mini">Com checagem manual marcada, o botão ${esc(lab(0, rec.fam))} do controle não passa para o próximo.</span>` : ''}`}
       <button class="btn" data-k="p">Imprimir / PDF <kbd>P</kbd></button>
     </div>`;
 }
@@ -1674,7 +1677,7 @@ function frame(now) {
     drawLive(gp, pressed);
     if (S.mode === 'test') { if (!S.paused) tickSession({gp, now, down, up}); }
     else if (S.mode === 'idle' && S.view === 'test' && down.has(0)) startTest(false);
-    else if (S.mode === 'report' && S.view === 'report' && !S.reportFromHist && down.has(0) && now - S.reportAt > 600) showStart();
+    else if (S.mode === 'report' && S.view === 'report' && !S.reportFromHist && down.has(0) && now - S.reportAt > 600 && !manualAberta()) showStart();
   } catch (e) { console.error(e); }
 }
 
