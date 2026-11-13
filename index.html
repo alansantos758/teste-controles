@@ -283,28 +283,41 @@ const BATT_ERR = {0xa: 'voltagem anormal', 0xb: 'temperatura anormal', 0xf: 'err
 const ICON = {ok: '✓', warn: '!', fail: '✕', na: '–', miss: '?'};
 const STLABEL = {ok: 'OK', warn: 'Atenção', fail: 'Falha', na: 'N/D', miss: 'Não testado'};
 const RANK = {ok: 0, na: 0, miss: 1, warn: 2, fail: 3};
-// Aberto pela OS do app de Manutenção: ?codigo=&os=&op=&retorno=. O laudo volta só para script.google.com.
+// Aberto por outro app, com volta do laudo só para script.google.com:
+//   OS da Manutenção ..... ?os=&codigo=&op=&retorno=
+//   Modo compra .......... ?modo=compra&compra=&item=&codigo=&nome=&op=&retorno=  (app de Compras)
 const OSP = (() => {
   try {
     const q = new URLSearchParams(location.search), ret = q.get('retorno') || '';
-    return q.get('os') && /^https:\/\/script\.google\.com\//.test(ret)
-      ? {codigo: (q.get('codigo') || '').trim(), os: q.get('os'), op: q.get('op') || '', retorno: ret} : null;
+    if (!/^https:\/\/script\.google\.com\//.test(ret)) return null;
+    const base = {codigo: (q.get('codigo') || '').trim(), op: q.get('op') || '', retorno: ret};
+    if (q.get('modo') === 'compra' && q.get('compra'))
+      return {...base, tipo: 'compra', compra: q.get('compra'), item: q.get('item') || '', nome: q.get('nome') || '',
+        icone: '🛒', rotulo: `Compra ${q.get('compra')}`, destino: 'a compra',
+        volta: extra => 'compra=' + encodeURIComponent(q.get('compra')) + '&item=' + encodeURIComponent(q.get('item') || '') + extra};
+    if (q.get('os'))
+      return {...base, tipo: 'os', os: q.get('os'), icone: '🛠️', rotulo: `OS ${q.get('os')}`, destino: 'a OS',
+        volta: extra => 'os=' + encodeURIComponent(q.get('os')) + extra};
+    return null;
   } catch (e) { return null; }
 })();
 const normCod = c => String(c || '').trim().replace(/^0+/, '');
 const osUrl = extra => OSP.retorno + (OSP.retorno.indexOf('?') >= 0 ? '&' : '?') + extra;
-const osBar = () => OSP ? `<div class="osbar"><span>🛠️ <b>OS ${esc(OSP.os)}</b> · item ${esc(OSP.codigo)} — ao terminar, envie o laudo para a OS</span>` +
-  `<a href="${esc(osUrl('codigo=' + encodeURIComponent(OSP.codigo)))}">↩ Voltar para a OS sem laudo</a></div>` : '';
-// Laudo resumido na URL de volta (defeitos, o que faltou testar, veredito)
+const osVoltaSemLaudo = () => osUrl(OSP.tipo === 'compra' ? OSP.volta('') : 'codigo=' + encodeURIComponent(OSP.codigo));
+const osBar = () => OSP ? `<div class="osbar"><span>${OSP.icone} <b>${esc(OSP.rotulo)}</b> · ${OSP.nome ? esc(OSP.nome) + ' · ' : ''}item ${esc(OSP.codigo)} — ao terminar, envie o laudo para ${OSP.destino}</span>` +
+  `<a href="${esc(osVoltaSemLaudo())}">↩ Voltar sem laudo</a></div>` : '';
+// Laudo resumido na URL de volta (defeitos, o que faltou testar, veredito).
+// g = grupo do item e x = valor medido (drift), usados pelo app de Compras para achar o sintoma da tabela de descontos.
 function enviarParaOS(rec) {
   if (!OSP || !rec) return;
   const probs = rec.items.filter(i => i.st === 'fail' || i.st === 'warn').sort((a, b) => RANK[b.st] - RANK[a.st]);
   const miss = rec.items.filter(i => i.st === 'miss');
   let corte = 90, url = '';
   do {
-    const laudo = {ts: rec.ts, id: rec.id, v: rec.verdict, m: rec.model, b: rec.batt,
-      d: probs.slice(0, 25).map(p => ({n: p.n, d: String(p.d || '').slice(0, corte), st: p.st})), f: miss.slice(0, 25).map(m => m.n)};
-    url = osUrl('os=' + encodeURIComponent(OSP.os) + '&laudo=' + encodeURIComponent(JSON.stringify(laudo)));
+    const laudo = {ts: rec.ts, id: rec.id, v: rec.verdict, m: rec.model, b: rec.batt, fam: rec.fam,
+      d: probs.slice(0, 25).map(p => ({n: p.n, g: p.g, d: String(p.d || '').slice(0, corte), st: p.st, ...(p.x != null ? {x: +p.x.toFixed(3)} : {})})),
+      f: miss.slice(0, 25).map(m => m.n)};
+    url = osUrl(OSP.volta('&laudo=' + encodeURIComponent(JSON.stringify(laudo))));
     corte -= 30;
   } while (url.length > 6000 && corte > 0);
   location.href = url;
@@ -1059,7 +1072,7 @@ function setRumble(k, v) {
 
 // ---------- avaliação ----------
 function evaluate(T, now) {
-  const items = [], add = (g, n, st, d) => items.push({g, n, st, d});
+  const items = [], add = (g, n, st, d, x) => items.push(x == null ? {g, n, st, d} : {g, n, st, d, x});
   // botões
   const pairs = [];
   for (const i of T.btns) for (const j of T.btns) if (i < j) {
@@ -1094,10 +1107,10 @@ function evaluate(T, now) {
       const off = median(s.eps.map(e => e.off)), sd = median(s.eps.map(e => e.std));
       let st = grade(off, CFG.drift), d = `desvio ${f3(off)} com o analógico solto`;
       if (sd > CFG.noiseWarn) { st = worse(st, 'warn'); d += `, leitura oscilando (±${f3(sd)})`; }
-      add('Analógicos', `Drift — ${nm}`, st, d);
+      add('Analógicos', `Drift — ${nm}`, st, d, off);
     }
     const rets = s.eps.filter(e => e.after && e.dur >= CFG.retMinMs).map(e => e.off);
-    if (rets.length) { const w = Math.max(...rets); add('Analógicos', `Retorno ao centro — ${nm}`, grade(w, CFG.ret), `pior desvio ${f3(w)} em ${rets.length} soltura${rets.length > 1 ? 's' : ''}`); }
+    if (rets.length) { const w = Math.max(...rets); add('Analógicos', `Retorno ao centro — ${nm}`, grade(w, CFG.ret), `pior desvio ${f3(w)} em ${rets.length} soltura${rets.length > 1 ? 's' : ''}`, w); }
     else add('Analógicos', `Retorno ao centro — ${nm}`, 'miss', 'não medido — leve até a borda e solte');
     const touched = s.sec.filter(v => v > CFG.sectorTouched).length;
     if (touched < CFG.sectors) add('Analógicos', `Curso — ${nm}`, 'miss', `giro incompleto (${touched}/${CFG.sectors} direções)`);
@@ -1218,8 +1231,8 @@ function renderReport(rec, fromHist) {
       <div class="bgrid">${rec.btns.map(b => `<span class="bchip ${b.st}">${esc(b.l)}<small>${b.n || ''}</small></span>`).join('')}</div></div>
     <div class="panel"><h3>Todas as verificações</h3><table class="tbl"><tbody>${rows}</tbody></table></div>
     ${!fromHist && OSP ? (normCod(rec.id) === normCod(OSP.codigo)
-      ? `<div class="osbar noprint"><span>🛠️ OS ${esc(OSP.os)}</span><button class="btn primary" data-k="o">↩ Enviar laudo para a OS <kbd>O</kbd></button></div>`
-      : `<div class="osbar noprint"><span>⚠️ O ID testado (${esc(rec.id)}) não é o item da OS (${esc(OSP.codigo)}): o laudo não pode ir para ela. Refaça com o código da OS.</span></div>`) : ''}
+      ? `<div class="osbar noprint"><span>${OSP.icone} ${esc(OSP.rotulo)}</span><button class="btn primary" data-k="o">↩ Enviar laudo para ${OSP.destino} <kbd>O</kbd></button></div>`
+      : `<div class="osbar noprint"><span>⚠️ O ID testado (${esc(rec.id)}) não é o item esperado (${esc(OSP.codigo)}): o laudo não pode ir para ${OSP.destino}. Refaça com o código informado.</span></div>`) : ''}
     <div class="actions noprint">
       ${fromHist ? '<button class="btn" data-k="escape">Voltar <kbd>Esc</kbd></button>'
                  : `<button class="btn primary" data-k="enter">Próximo controle <kbd>Enter / ${esc(lab(0, rec.fam))}</kbd></button><button class="btn" data-k="r">Refazer teste <kbd>R</kbd></button>`}
