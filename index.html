@@ -269,7 +269,7 @@ const CFG = {
   minPresses: 2,                                       // acionamentos mínimos para o botão contar como testado
   restWin: 24, restStd: 0.025,                         // repouso do analógico: ~400 ms com leitura estável
   noiseWarn: 0.012, retMinMs: 600,
-  drift: {warn: 0.05, fail: 0.10},                     // desvio do centro com o analógico solto
+  drift: {warn: 0.08, fail: 0.08},                     // desvio do centro com o analógico solto: drift acima de 0,080 (Xbox e PS), sem faixa de alerta
   ret: {warn: 0.07, fail: 0.12},                       // pior desvio depois de levar até a borda e soltar
   reach: {warn: 0.92, fail: 0.80},                     // alcance mínimo em qualquer direção
   sectors: 24, sectorOk: 0.90, sectorTouched: 0.3,
