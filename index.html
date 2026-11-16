@@ -274,7 +274,7 @@ const CFG = {
   reach: {warn: 0.92, fail: 0.80},                     // alcance mínimo em qualquer direção
   sectors: 24, sectorOk: 0.90, sectorTouched: 0.3,
   chatterGapMs: 35, chatterPressMs: 12,                // falso contato (bounce): intervalos suspeitos
-  chatterWarn: 3, chatterFail: 6,                      // ocorrências para alerta / reprovação (abaixo disso é tremor normal)
+  chatterWarn: 3,                                      // ocorrências para a dica no laudo (abaixo disso é tremor normal)
   chatterIgnore: [6, 7, 12, 13, 14, 15],               // gatilhos (analógicos) e D-pad (diagonais) dão falso positivo
   longHoldMs: 5000, crossMin: 2, crossRatio: 0.5,
   trigRest: 0.05, trigMax: {warn: 0.95, fail: 0.85}, trigLevels: 6,
@@ -1106,7 +1106,8 @@ function evaluate(T, now) {
       st = B.n >= CFG.minPresses ? 'ok' : 'miss';
       d.push(`${B.n} acionamento${B.n > 1 ? 's' : ''}${B.n < CFG.minPresses ? ` (mínimo ${CFG.minPresses})` : ''}`);
       const c = chatCount(B);
-      if (c >= CFG.chatterWarn) { st = worse(st, c >= CFG.chatterFail ? 'fail' : 'warn'); d.push(`falso contato ${c}x`); }
+      // Falso contato só orienta o operador: não muda o resultado nem vai para a OS. Confirmado, ele marca na checagem manual.
+      if (c >= CFG.chatterWarn) d.push(`possível falso contato ${c}x — se confirmar, marque na checagem manual`);
       for (const [a, b, c2] of pairs) if (a === i || b === i) { st = worse(st, 'warn'); d.push(`acionou junto com ${lab(a === i ? b : a, T.fam)} (${c2}x)`); }
       if (hold > CFG.longHoldMs) { st = worse(st, 'warn'); d.push(`ficou ${Math.round(hold / 1000)}s pressionado — conferir se trava`); }
     }
@@ -1233,6 +1234,7 @@ const MANUAIS = [
   {k: 'FERRUGEM', n: 'Ferrugem / oxidação', st: 'fail'},
   {k: 'BOTAO_FROUXO', n: 'Botão frouxo', st: 'warn', qual: 'botoes'},
   {k: 'BOTAO_DURO', n: 'Botão duro / afundado', st: 'warn', qual: 'botoes'},
+  {k: 'FALSO_CONTATO', n: 'Falso contato / clique duplo', st: 'warn', qual: 'botoes'},
   {k: 'TRAVADINHA', n: 'Analógico travadinha', st: 'warn', qual: 'analogicos'},
   {k: 'PECA_FALTANDO', n: 'Peça faltando', st: 'warn', qual: 'pecas'},
   {k: 'LED', n: 'LED / luz queimada', st: 'warn'},
