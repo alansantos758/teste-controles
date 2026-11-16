@@ -270,7 +270,7 @@ const CFG = {
   restWin: 24, restStd: 0.025,                         // repouso do analógico: ~400 ms com leitura estável
   noiseWarn: 0.012, retMinMs: 600,
   drift: {warn: 0.08, fail: 0.08},                     // desvio do centro com o analógico solto: drift acima de 0,080 (Xbox e PS), sem faixa de alerta
-  ret: {warn: 0.07, fail: 0.12},                       // pior desvio depois de levar até a borda e soltar
+  ret: {warn: 0.08, fail: 0.08},                       // pior desvio depois de levar até a borda e soltar (mesmo limite do drift)
   reach: {warn: 0.92, fail: 0.80},                     // alcance mínimo em qualquer direção
   sectors: 24, sectorOk: 0.90, sectorTouched: 0.3,
   chatterGapMs: 35, chatterPressMs: 12,                // falso contato (bounce): intervalos suspeitos
@@ -1121,7 +1121,8 @@ function evaluate(T, now) {
     else {
       const off = median(s.eps.map(e => e.off)), sd = median(s.eps.map(e => e.std));
       let st = grade(off, CFG.drift), d = `desvio ${f3(off)} com o analógico solto`;
-      if (sd > CFG.noiseWarn) { st = worse(st, 'warn'); d += `, leitura oscilando (±${f3(sd)})`; }
+      // oscilação só informa: drift registrado é apenas o desvio acima do limite
+      if (sd > CFG.noiseWarn) d += `, leitura oscilando (±${f3(sd)})`;
       add('Analógicos', `Drift — ${nm}`, st, d, off);
     }
     const rets = s.eps.filter(e => e.after && e.dur >= CFG.retMinMs).map(e => e.off);
