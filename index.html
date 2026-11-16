@@ -273,7 +273,9 @@ const CFG = {
   ret: {warn: 0.07, fail: 0.12},                       // pior desvio depois de levar até a borda e soltar
   reach: {warn: 0.92, fail: 0.80},                     // alcance mínimo em qualquer direção
   sectors: 24, sectorOk: 0.90, sectorTouched: 0.3,
-  chatterGapMs: 35, chatterPressMs: 12, chatterFail: 3,// falso contato (bounce)
+  chatterGapMs: 35, chatterPressMs: 12,                // falso contato (bounce): intervalos suspeitos
+  chatterWarn: 3, chatterFail: 6,                      // ocorrências para alerta / reprovação (abaixo disso é tremor normal)
+  chatterIgnore: [6, 7, 12, 13, 14, 15],               // gatilhos (analógicos) e D-pad (diagonais) dão falso positivo
   longHoldMs: 5000, crossMin: 2, crossRatio: 0.5,
   trigRest: 0.05, trigMax: {warn: 0.95, fail: 0.85}, trigLevels: 6,
   gyroRange: 2500, accelRange: 2500, moveSeen: 400,
@@ -594,11 +596,13 @@ function onHid(e) {
   hs.btn = cur;
 }
 function noteChatter(src, i) {
-  const B = S.mode === 'test' && S.T.b[i];
+  const B = S.mode === 'test' && !CFG.chatterIgnore.includes(i) && S.T.b[i];
   if (!B) return;
   B.chat[src]++;
-  if (B.chat[src] > Math.max(B.chat.poll, B.chat.hid) - 1) logEv(`Falso contato em ${lab(i)}`, true);
+  if (B.chat[src] === CFG.chatterWarn && B.chat[src] >= chatCount(B)) logEv(`Falso contato em ${lab(i)}`, true);
 }
+// Pior contagem entre as duas fontes (Gamepad API e HID), que observam o mesmo botão.
+const chatCount = B => Math.max(B.chat.poll, B.chat.hid);
 
 // ---------- vibração ----------
 function canRumble() { return !!currentPad()?.vibrationActuator || (S.hid && S.hidConn === 'usb'); }
@@ -982,7 +986,7 @@ function tickSession({gp, now, down, up}) {
 function btnLiveState(i) {
   const B = S.T.b[i];
   if (!B.n) return '';
-  const issue = B.chat.poll || B.chat.hid || (B.downAt != null && performance.now() - B.downAt > CFG.longHoldMs);
+  const issue = chatCount(B) >= CFG.chatterWarn || (B.downAt != null && performance.now() - B.downAt > CFG.longHoldMs);
   return issue ? 'warn' : B.n >= CFG.minPresses ? 'ok' : 'part';
 }
 const motionProgress = T => {
@@ -1101,8 +1105,8 @@ function evaluate(T, now) {
     } else {
       st = B.n >= CFG.minPresses ? 'ok' : 'miss';
       d.push(`${B.n} acionamento${B.n > 1 ? 's' : ''}${B.n < CFG.minPresses ? ` (mínimo ${CFG.minPresses})` : ''}`);
-      const c = Math.max(B.chat.poll, B.chat.hid);
-      if (c) { st = worse(st, c >= CFG.chatterFail ? 'fail' : 'warn'); d.push(`falso contato ${c}x`); }
+      const c = chatCount(B);
+      if (c >= CFG.chatterWarn) { st = worse(st, c >= CFG.chatterFail ? 'fail' : 'warn'); d.push(`falso contato ${c}x`); }
       for (const [a, b, c2] of pairs) if (a === i || b === i) { st = worse(st, 'warn'); d.push(`acionou junto com ${lab(a === i ? b : a, T.fam)} (${c2}x)`); }
       if (hold > CFG.longHoldMs) { st = worse(st, 'warn'); d.push(`ficou ${Math.round(hold / 1000)}s pressionado — conferir se trava`); }
     }
