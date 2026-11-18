@@ -271,6 +271,7 @@ const CFG = {
   noiseWarn: 0.012, retMinMs: 600,
   drift: {warn: 0.08, fail: 0.08},                     // desvio do centro com o analógico solto: drift acima de 0,080 (Xbox e PS), sem faixa de alerta
   ret: {warn: 0.08, fail: 0.08},                       // pior desvio depois de levar até a borda e soltar (mesmo limite do drift)
+  drift360: {warn: 0.20, fail: 0.20},                  // Xbox 360: limite próprio de drift e retorno ao centro (igual ao app de Compras)
   reach: {warn: 0.92, fail: 0.80},                     // alcance mínimo em qualquer direção
   sectors: 24, sectorOk: 0.90, sectorTouched: 0.3,
   chatterGapMs: 35, chatterPressMs: 12,                // falso contato (bounce): intervalos suspeitos
@@ -295,15 +296,15 @@ const ICON = {ok: '✓', warn: '!', fail: '✕', na: '–', miss: '?'};
 const STLABEL = {ok: 'OK', warn: 'Atenção', fail: 'Falha', na: 'N/D', miss: 'Não testado'};
 const RANK = {ok: 0, na: 0, miss: 1, warn: 2, fail: 3};
 // Aberto por outro app, com volta do laudo só para script.google.com:
-//   OS da Manutenção ..... ?os=&codigo=&op=&retorno=
+//   OS da Manutenção ..... ?os=&codigo=&op=&nome=&retorno=
 //   Modo compra .......... ?modo=compra&compra=&item=&codigo=&nome=&op=&retorno=  (app de Compras)
 const OSP = (() => {
   try {
     const q = new URLSearchParams(location.search), ret = q.get('retorno') || '';
     if (!/^https:\/\/script\.google\.com\//.test(ret)) return null;
-    const base = {codigo: (q.get('codigo') || '').trim(), op: q.get('op') || '', retorno: ret};
+    const base = {codigo: (q.get('codigo') || '').trim(), op: q.get('op') || '', nome: q.get('nome') || '', retorno: ret};
     if (q.get('modo') === 'compra' && q.get('compra'))
-      return {...base, tipo: 'compra', compra: q.get('compra'), item: q.get('item') || '', nome: q.get('nome') || '',
+      return {...base, tipo: 'compra', compra: q.get('compra'), item: q.get('item') || '',
         icone: '🛒', rotulo: `Compra ${q.get('compra')}`, destino: 'a compra',
         volta: extra => 'compra=' + encodeURIComponent(q.get('compra')) + '&item=' + encodeURIComponent(q.get('item') || '') + extra};
     if (q.get('os'))
@@ -361,6 +362,16 @@ const lab = (i, fam) => (LABELS[fam || (S.T ? S.T.fam : S.fam)] || LABELS.generi
 const stage = html => { $('#stage').innerHTML = html; };
 const hint = t => { const h = $('#hint'); if (h) h.textContent = t; };
 const grade = (v, t) => v > t.fail ? 'fail' : v > t.warn ? 'warn' : 'ok';
+const driftLim = T => T && T.x360 ? CFG.drift360 : CFG.drift;
+const retLim = T => T && T.x360 ? CFG.drift360 : CFG.ret;
+// Xbox 360 pelo Product ID ou pelo nome do item vindo do app de Compras; o operador ainda pode marcar no teste
+const is360Inicial = () => S.fam === 'xbox' && (S.x360 || !!(OSP && /xbox\s*360/i.test(OSP.nome || '')));
+function setX360(on) {
+  const T = S.T;
+  if (!T || T.fam !== 'xbox') return;
+  T.x360 = on; T.model = on ? 'Controle Xbox 360' : 'Controle Xbox';
+  logEv(on ? 'Marcado como Xbox 360: drift reprova acima de 0,200' : 'Desmarcado Xbox 360: drift reprova acima de 0,080');
+}
 const gradeLow = (v, t) => v < t.fail ? 'fail' : v < t.warn ? 'warn' : 'ok';
 const worse = (a, b) => RANK[b] > RANK[a] ? b : a;
 let COL = {};
@@ -388,6 +399,8 @@ function detect(id) {
   const s = id.toLowerCase();
   const vid = (s.match(/vendor:\s*([0-9a-f]{4})/) || [])[1], pid = (s.match(/product:\s*([0-9a-f]{4})/) || [])[1];
   // Xbox primeiro: o Series no Bluetooth se chama "Xbox Wireless Controller" e cairia no teste de "wireless controller" do PS4
+  // No Windows o Chrome chama qualquer controle XInput de "Xbox 360 Controller": só o Product ID confirma o 360
+  if (vid === '045e' && ['028e', '028f', '0719'].includes(pid)) return {fam: 'xbox', model: 'Controle Xbox 360', x360: true};
   if (vid === '045e' || /xinput|xbox/.test(s)) return {fam: 'xbox', model: 'Controle Xbox'};
   if (vid === '054c' || /dualsense|dualshock|wireless controller/.test(s)) {
     if (pid === '0df2' || /edge/.test(s)) return {fam: 'ps', model: 'DualSense Edge (PS5)'};
@@ -500,7 +513,7 @@ function padChanged(gp) {
     return;
   }
   const d = detect(gp.id);
-  S.fam = d.fam; S.model = d.model; S.mapping = gp.mapping; S.ps3 = !!d.ps3;
+  S.fam = d.fam; S.model = d.model; S.mapping = gp.mapping; S.ps3 = !!d.ps3; S.x360 = !!d.x360;
   buildPad(S.fam); refreshStart();
   if (S.fam === 'ps' && !S.ps3) hidAuto();
 }
@@ -763,8 +776,9 @@ async function remeasureXbox() {
   T.st.L.eps = []; T.st.L.cur = null; T.st.R.eps = []; T.st.R.cur = null;
   logEv(`Drift após recalibrar no DriftGuard:esq ${f3(C.after.L.off)}, dir ${f3(C.after.R.off)}`);
   C.phase = 'done';
-  const cell = (a, b) => `<td>${f3(a)}</td><td class="${b <= CFG.drift.warn ? 'good' : 'bad'}">${f3(b)}</td>`;
-  const still = [C.after.L, C.after.R].some(s => s.off > CFG.drift.warn);
+  const lim = driftLim(T).warn;
+  const cell = (a, b) => `<td>${f3(a)}</td><td class="${b <= lim ? 'good' : 'bad'}">${f3(b)}</td>`;
+  const still = [C.after.L, C.after.R].some(s => s.off > lim);
   calibUI(`<h2>Resultado</h2>
     <table class="cmp"><tr><th>Analógico</th><th>Antes</th><th>Depois</th></tr>
       <tr><td>Esquerdo</td>${cell(C.before.L.off, C.after.L.off)}</tr>
@@ -901,7 +915,8 @@ async function startTest(gesture, idOverride) {
   const gp = currentPad(), nb = gp.buttons.length, fam = S.fam, now = performance.now();
   const T = {
     id: idOverride || ($('#cid')?.value || '').trim() || autoId(), op: $('#op').value.trim(),
-    model: S.model, fam, start: Date.now(), t0: now, hidUsed: !!S.hid, disconnects: 0, log: [], logV: 0,
+    model: is360Inicial() ? 'Controle Xbox 360' : S.model, x360: is360Inicial(),
+    fam, start: Date.now(), t0: now, hidUsed: !!S.hid, disconnects: 0, log: [], logV: 0,
     btns: ORDER.filter(i => i < nb && (i !== 17 || fam === 'ps')),
     opt: fam === 'ps' ? [] : [16],     // botão Xbox/Home não é exposto pelo navegador
     b: {}, st: {L: mkStick(), R: mkStick()}, tr: {}, rumble: {forte: null, fraco: null},
@@ -1009,6 +1024,7 @@ function renderShell() {
       <div><h3>Analógico direito</h3><canvas id="cvR" width="190" height="190"></canvas><p class="mini" id="infR"></p></div>
     </div>
     <div class="calrow"><button class="btn sm" id="calbtn" data-k="calib">Corrigir drift</button><span class="mini" id="calwhy"></span></div>
+    ${T.fam === 'xbox' ? `<label class="calrow mini" style="cursor:pointer"><input type="checkbox" id="x360" ${T.x360 ? 'checked' : ''}> É um <b>Xbox 360</b> — drift só reprova acima de 0,200 (demais: 0,080)</label>` : ''}
     <div class="sec"><h3>Gatilhos</h3>
       ${Object.keys(T.tr).map(i => `<div class="trow"><b>${esc(lab(+i))}</b><div class="tbar"><i id="tb${i}"></i><b id="tm${i}"></b></div><span class="mini" id="ti${i}"></span></div>`).join('')}</div>
     <div class="sec"><h3>Vibração</h3>
@@ -1028,6 +1044,8 @@ function renderShell() {
       <button class="btn" data-k="escape">Cancelar <kbd>Esc</kbd></button>
     </div>`);
   S._chipKey = {}; S._logV = -1; S._calwhy = undefined;
+  const x = $('#x360');
+  if (x) x.addEventListener('change', e => { setX360(e.target.checked); e.target.blur(); });
 }
 
 function renderLive(gp, now) {
@@ -1120,13 +1138,13 @@ function evaluate(T, now) {
     if (!s.eps.length) add('Analógicos', `Drift — ${nm}`, 'miss', 'repouso não medido — solte o analógico por 1 segundo');
     else {
       const off = median(s.eps.map(e => e.off)), sd = median(s.eps.map(e => e.std));
-      let st = grade(off, CFG.drift), d = `desvio ${f3(off)} com o analógico solto`;
+      let st = grade(off, driftLim(T)), d = `desvio ${f3(off)} com o analógico solto${T.x360 ? ' (limite do Xbox 360: 0,200)' : ''}`;
       // oscilação só informa: drift registrado é apenas o desvio acima do limite
       if (sd > CFG.noiseWarn) d += `, leitura oscilando (±${f3(sd)})`;
       add('Analógicos', `Drift — ${nm}`, st, d, off);
     }
     const rets = s.eps.filter(e => e.after && e.dur >= CFG.retMinMs).map(e => e.off);
-    if (rets.length) { const w = Math.max(...rets); add('Analógicos', `Retorno ao centro — ${nm}`, grade(w, CFG.ret), `pior desvio ${f3(w)} em ${rets.length} soltura${rets.length > 1 ? 's' : ''}`, w); }
+    if (rets.length) { const w = Math.max(...rets); add('Analógicos', `Retorno ao centro — ${nm}`, grade(w, retLim(T)), `pior desvio ${f3(w)} em ${rets.length} soltura${rets.length > 1 ? 's' : ''}`, w); }
     else add('Analógicos', `Retorno ao centro — ${nm}`, 'miss', 'não medido — leve até a borda e solte');
     const touched = s.sec.filter(v => v > CFG.sectorTouched).length;
     if (touched < CFG.sectors) add('Analógicos', `Curso — ${nm}`, 'miss', `giro incompleto (${touched}/${CFG.sectors} direções)`);
@@ -1137,7 +1155,7 @@ function evaluate(T, now) {
     }
   }
   if (T.calib) {
-    const c = T.calib, still = Math.max(c.after.L, c.after.R) > CFG.drift.warn;
+    const c = T.calib, still = Math.max(c.after.L, c.after.R) > driftLim(T).warn;
     add('Analógicos', 'Recalibração de drift', !c.saved ? 'warn' : still ? 'warn' : 'ok',
         `esquerdo ${f3(c.before.L)} → ${f3(c.after.L)} · direito ${f3(c.before.R)} → ${f3(c.after.R)}`
         + (!c.saved ? ' — não gravada no controle' : still ? ' — drift persiste, provável desgaste do módulo' : c.via ? ` — via ${c.via}` : ' — gravada no controle'));
