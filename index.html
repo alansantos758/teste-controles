@@ -281,6 +281,8 @@ const CFG = {
   trigRest: 0.05, trigMax: {warn: 0.95, fail: 0.85}, trigLevels: 6,
   gyroRange: 2500, accelRange: 2500, moveSeen: 400,
   battLow: 20,
+  quietMs: 4000, quietGraceMs: 1000, quietTrig: 0.15,  // repouso final: controle parado na mesa; o 1º segundo é para o operador soltar
+  spikeMs: 40, spikeMin: 2,                            // gatilho: pulso mais curto que isso não é dedo — a partir de 2 vira alerta
 };
 
 const SONY = 0x054c;
@@ -521,6 +523,7 @@ function padLost() {
   S.padIndex = null; S.padId = null;
   if (S.mode === 'test') {
     if (S.calib && S.calib.phase === 'xbox') { logEv('Controle saiu do navegador (troca de driver)'); xboxCalStatus(); return; }
+    if (S.quiet) cancelQuiet();
     if (!S.paused) {
       S.paused = true; S.T.disconnects++; S.T.discAt = S.hidConn === 'bt' ? performance.now() : null;
       logEv('Controle desconectado', true); $('#pause').hidden = false; beep(false);
@@ -896,7 +899,7 @@ function drawTouch(cv, q, trail) {
 
 // ---------- sessão de teste livre ----------
 const mkStick = () => ({sec: Array(CFG.sectors).fill(0), buf: [], eps: [], cur: null, far: false, trail: []});
-const mkTrig = () => ({max: 0, min: 1, lv: new Set(), n: 0, armed: false});
+const mkTrig = () => ({max: 0, min: 1, lv: new Set(), n: 0, armed: false, armAt: null, spk: 0, cross: {}});
 
 function logEv(txt, bad = false) {
   const T = S.T; if (!T) return;
@@ -930,7 +933,7 @@ async function startTest(gesture, idOverride) {
 }
 function autoId() { const n = store.get('ctrltest.seq', 0) + 1; store.set('ctrltest.seq', n); return 'CTRL-' + String(n).padStart(4, '0'); }
 function cancelTest() {
-  $('#pause').hidden = true; $('#confirm').hidden = true; S.paused = false; S.confirm = false; closeCalib();
+  $('#pause').hidden = true; $('#confirm').hidden = true; S.paused = false; S.confirm = false; S.quiet = null; closeCalib();
   $('#feed').innerHTML = ''; showStart();
 }
 
@@ -964,7 +967,7 @@ function tickSession({gp, now, down, up}) {
     const B = T.b[i];
     if (down.has(i)) {
       B.n++; B.downAt = now; B.longLogged = false;
-      for (const j of down) if (j !== i && T.b[j]) B.cross[j] = (B.cross[j] || 0) + 1;
+      for (const j of down) if (j !== i && (T.b[j] || T.tr[j])) B.cross[j] = (B.cross[j] || 0) + 1;
       logEv(`${lab(i)} · ${B.n}x`);
     }
     if (up.has(i) && B.downAt != null) { B.maxHold = Math.max(B.maxHold, now - B.downAt); B.downAt = null; B.heldAtStart = false; }
@@ -977,8 +980,13 @@ function tickSession({gp, now, down, up}) {
     const v = gp.buttons[i]?.value || 0;
     t.v = v; t.max = Math.max(t.max, v); t.min = Math.min(t.min, v);
     if (v > 0.03 && v < 0.97) t.lv.add(Math.round(v * 1000));
-    if (v > 0.5 && !t.armed) { t.armed = true; t.n++; logEv(`${lab(i)} · ${t.n}x (${pct(t.max)})`); }
-    else if (v < 0.2) t.armed = false;
+    if (down.has(+i)) for (const j of down) if (j !== +i && (T.b[j] || T.tr[j])) t.cross[j] = (t.cross[j] || 0) + 1;
+    if (v > 0.5 && !t.armed) { t.armed = true; t.armAt = now; t.n++; logEv(`${lab(i)} · ${t.n}x (${pct(t.max)})`); }
+    else if (v < 0.2 && t.armed) {
+      t.armed = false;
+      // Dedo não aperta e solta um gatilho em menos de 40 ms: pulso assim é acionamento sozinho.
+      if (now - t.armAt < CFG.spikeMs && ++t.spk === CFG.spikeMin) logEv(`${lab(i)} com pulsos rápidos — pode estar acionando sozinho`, true);
+    }
   }
   if (T.hidUsed && S.hid && now - S.hs.t < 200) {
     [...S.hs.gyro, ...S.hs.accel].forEach((x, k) => { T.mo.mn[k] = Math.min(T.mo.mn[k], x); T.mo.mx[k] = Math.max(T.mo.mx[k], x); });
@@ -1106,11 +1114,12 @@ function setRumble(k, v) {
 function evaluate(T, now) {
   const items = [], add = (g, n, st, d, x) => items.push(x == null ? {g, n, st, d} : {g, n, st, d, x});
   // botões
-  const pairs = [];
-  for (const i of T.btns) for (const j of T.btns) if (i < j) {
-    const c = T.b[i].cross[j] || 0;
-    if (c >= CFG.crossMin && c >= CFG.crossRatio * Math.min(T.b[i].n, T.b[j].n)) pairs.push([i, j, c]);
+  const pairs = [], unit = i => T.b[i] || T.tr[i], all = [...T.btns, ...Object.keys(T.tr).map(Number)];
+  for (const i of all) for (const j of all) if (i < j) {
+    const c = unit(i).cross[j] || 0;
+    if (c >= CFG.crossMin && c >= CFG.crossRatio * Math.min(unit(i).n, unit(j).n)) pairs.push([i, j, c]);
   }
+  const ghost = T.ghost || {}, GHOST = 'acionou sozinho com o controle parado';
   const bst = {}, bn = {};
   for (const i of T.btns) {
     const B = T.b[i], L = lab(i, T.fam), d = [];
@@ -1129,6 +1138,7 @@ function evaluate(T, now) {
       for (const [a, b, c2] of pairs) if (a === i || b === i) { st = worse(st, 'warn'); d.push(`acionou junto com ${lab(a === i ? b : a, T.fam)} (${c2}x)`); }
       if (hold > CFG.longHoldMs) { st = worse(st, 'warn'); d.push(`ficou ${Math.round(hold / 1000)}s pressionado — conferir se trava`); }
     }
+    if (ghost[i]) { st = 'fail'; d.unshift(GHOST); }
     bst[i] = st; bn[i] = B.n;
     add('Botões', L, st, d.join(' · '));
   }
@@ -1163,11 +1173,14 @@ function evaluate(T, now) {
   // gatilhos
   for (const i of Object.keys(T.tr)) {
     const t = T.tr[i], L = lab(+i, T.fam);
-    if (t.max < 0.05) { add('Gatilhos', L, 'miss', 'sem registro — não foi apertado ou não funciona'); continue; }
+    if (t.max < 0.05) { add('Gatilhos', L, ghost[i] ? 'fail' : 'miss', ghost[i] ? GHOST : 'sem registro — não foi apertado ou não funciona'); continue; }
     let st = gradeLow(t.max, CFG.trigMax);
     const d = [`chega a ${pct(t.max)}`, `${t.n} acionamento${t.n === 1 ? '' : 's'}`];
     if (t.min > CFG.trigRest) { st = 'fail'; d.push(`não volta ao zero (${pct(t.min)} solto)`); }
     if (t.lv.size < CFG.trigLevels) { st = worse(st, 'warn'); d.push('leitura sem progressão (liga/desliga)'); }
+    if (t.spk >= CFG.spikeMin) { st = worse(st, 'warn'); d.push(`${t.spk} pulsos rápidos — possível acionamento sozinho`); }
+    for (const [a, b, c2] of pairs) if (a === +i || b === +i) { st = worse(st, 'warn'); d.push(`acionou junto com ${lab(a === +i ? b : a, T.fam)} (${c2}x)`); }
+    if (ghost[i]) { st = 'fail'; d.unshift(GHOST); }
     add('Gatilhos', L, st, d.join(' · '));
   }
   // vibração
@@ -1222,6 +1235,7 @@ function finalize(force) {
     return;
   }
   $('#confirm').hidden = true; S.confirm = false;
+  if (!T.ghost) return startQuiet();
   const verdict = veredito(items);
   const rec = {
     id: T.id, ts: T.start, dur: Date.now() - T.start, op: T.op, model: T.model, fam: T.fam,
@@ -1235,6 +1249,32 @@ function finalize(force) {
   beep(verdict === 'APROVADO' || verdict === 'APROVADO COM RESSALVAS', verdict === 'APROVADO' ? 1046 : undefined);
   renderReport(rec, false);
 }
+
+// ---------- repouso final: com o controle parado na mesa, qualquer acionamento é defeito ----------
+// Durante o teste não dá para separar fantasma de dedo (o operador pode apertar vários juntos); aqui ninguém toca.
+function startQuiet() {
+  S.quiet = {t0: performance.now(), hits: {}};
+  $('#confirmBox').innerHTML = `<h2>Solte o controle na mesa</h2>
+    <p class="lead">Não toque nele — o app confere se algum botão ou gatilho aciona sozinho.</p>
+    <div class="timer" id="qtimer"></div><p class="lead t-bad" id="qhits"></p>
+    <div class="actions"><button class="btn" data-k="escape">Voltar ao teste <kbd>Esc</kbd></button></div>`;
+  $('#confirm').hidden = false;
+}
+function quietTick(gp, now, pressed) {
+  const Q = S.quiet, T = S.T, el = now - Q.t0;
+  if (el > CFG.quietGraceMs) {
+    const hit = i => {
+      if (Q.hits[i]) return;
+      Q.hits[i] = true; logEv(`${lab(i)} acionou sozinho (controle parado)`, true); beep(false);
+      $('#qhits').textContent = 'Acionou sozinho: ' + Object.keys(Q.hits).map(k => lab(+k)).join(', ');
+    };
+    for (const i of T.btns) if (pressed[i]) hit(i);
+    for (const i of Object.keys(T.tr)) if ((gp.buttons[i]?.value || 0) > CFG.quietTrig) hit(+i);
+  }
+  $('#qtimer').textContent = Math.max(0, Math.ceil((CFG.quietMs - el) / 1000));
+  if (el >= CFG.quietMs) { T.ghost = Q.hits; S.quiet = null; finalize(true); }
+}
+function cancelQuiet() { S.quiet = null; $('#confirm').hidden = true; }
 
 // ---------- checagem manual (defeitos que o teste não mede: o operador marca no laudo) ----------
 const veredito = items => items.some(i => i.st === 'fail') ? 'REPROVADO'
@@ -1353,7 +1393,7 @@ function showStart() {
     <label class="field"><span>ID / código do controle</span><input id="cid" autocomplete="off" spellcheck="false" placeholder="Bipe ou digite — opcional"></label>
     <p class="hint" id="hint"></p>
     <p class="lead" style="margin:6px 0 0">Durante o teste, o app registra sozinho:</p>
-    <ul class="plan"><li>Botões que não respondem</li><li>Falso contato / clique falhando</li><li>Botão preso ou acionando outro</li><li>Drift e retorno ao centro</li><li>Curso dos analógicos e gatilhos</li><li>Vibração, bateria e sensores (PS)</li><li>Tudo que ficou sem testar</li></ul>
+    <ul class="plan"><li>Botões que não respondem</li><li>Falso contato / clique falhando</li><li>Botão preso, acionando outro ou acionando sozinho</li><li>Drift e retorno ao centro</li><li>Curso dos analógicos e gatilhos</li><li>Vibração, bateria e sensores (PS)</li><li>Tudo que ficou sem testar</li></ul>
     <div class="actions"><button class="btn primary" id="go" data-k="enter">Iniciar teste <kbd>Enter</kbd></button></div>`);
   if (OSP) { $('#cid').value = OSP.codigo; if (OSP.op && !$('#op').value.trim()) $('#op').value = OSP.op; }
   setTimeout(() => $('#cid')?.focus(), 0);
@@ -1641,6 +1681,7 @@ function handleKey(k) {
   if (S.mode !== 'test') return;
   if (S.calib) return calibKey(k);
   if (k === 'calib') return openCalib();
+  if (S.quiet) { if (k === 'escape') cancelQuiet(); return; }
   if (S.confirm) {
     if (k === 'enter') finalize(true);
     else if (k === 'escape') { S.confirm = false; $('#confirm').hidden = true; }
@@ -1700,7 +1741,7 @@ function frame(now) {
     }
     S.prev = pressed;
     drawLive(gp, pressed);
-    if (S.mode === 'test') { if (!S.paused) tickSession({gp, now, down, up}); }
+    if (S.mode === 'test') { if (S.quiet) quietTick(gp, now, pressed); else if (!S.paused) tickSession({gp, now, down, up}); }
     else if (S.mode === 'idle' && S.view === 'test' && down.has(0)) startTest(false);
     else if (S.mode === 'report' && S.view === 'report' && !S.reportFromHist && down.has(0) && now - S.reportAt > 600 && !manualAberta()) showStart();
   } catch (e) { console.error(e); }
