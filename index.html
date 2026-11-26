@@ -131,7 +131,9 @@ canvas{max-width:100%;height:auto;display:block;margin:0 auto}
 .misslist li.ret{color:var(--warn);font-size:16px}
 /* Retorno ao centro: o operador costuma esquecer — fica piscando até ser medido nos dois analógicos */
 .retbox{margin:8px auto 0;max-width:230px;padding:8px 10px;border-radius:10px;border:2px dashed var(--warn);background:rgba(245,158,11,.12);color:var(--warn);font-weight:700;font-size:14px;text-align:center;animation:retpulse 1.4s ease-in-out infinite}
-.retbox small{display:block;font-weight:500;color:var(--text);opacity:.85;font-size:12px}
+.retbox small{display:block;font-weight:500;color:var(--text);opacity:.85;font-size:12px;margin-top:2px}
+.retbox small b{font-weight:700;color:var(--warn);white-space:nowrap}
+.retbox small b.feito{color:var(--ok)}
 .retbox.solte{border-style:solid;background:rgba(79,140,255,.15);border-color:var(--accent);color:var(--accent)}
 .retbox.ok{border:2px solid rgba(34,197,94,.5);background:rgba(34,197,94,.08);color:var(--ok);animation:none}
 .retbox.fail{border:2px solid var(--bad);background:rgba(239,68,68,.15);color:#fca5a5;animation:none}
@@ -279,6 +281,7 @@ const CFG = {
   minPresses: 2,                                       // acionamentos mínimos para o botão contar como testado
   restWin: 24, restStd: 0.025,                         // repouso do analógico: ~400 ms com leitura estável
   noiseWarn: 0.012, retMinMs: 600,
+  retPorDirecao: 3,                                    // retorno ao centro: solturas mínimas em cada direção (← → ↑ ↓)
   drift: {warn: 0.08, fail: 0.08},                     // desvio do centro com o analógico solto: drift acima de 0,080 (Xbox e PS), sem faixa de alerta
   ret: {warn: 0.08, fail: 0.08},                       // pior desvio depois de levar até a borda e soltar (mesmo limite do drift)
   drift360: {warn: 0.20, fail: 0.20},                  // Xbox 360: limite próprio de drift e retorno ao centro (igual ao app de Compras)
@@ -300,6 +303,8 @@ const SONY_PIDS = [0x05c4, 0x09cc, 0x0ba0, 0x0ce6, 0x0df2];   // DS4 v1, DS4 v2,
 const LABELS = {
   xbox: ['A','B','X','Y','LB','RB','LT','RT','View','Menu','LS (clique)','RS (clique)','D-pad ↑','D-pad ↓','D-pad ←','D-pad →','Xbox'],
   ps: ['✕','○','□','△','L1','R1','L2','R2','Share','Options','L3','R3','D-pad ↑','D-pad ↓','D-pad ←','D-pad →','PS','Touchpad'],
+  // DualSense: Share vira Create e o botão Mute (18) só chega pelo HID
+  ps5: ['✕','○','□','△','L1','R1','L2','R2','Create','Options','L3','R3','D-pad ↑','D-pad ↓','D-pad ←','D-pad →','PS','Touchpad','Mute (mic)'],
   generic: ['B1','B2','B3','B4','L1','R1','L2','R2','Select','Start','L3','R3','D-pad ↑','D-pad ↓','D-pad ←','D-pad →','Home'],
 };
 const ORDER = [0,1,2,3,12,15,13,14,4,5,8,9,10,11,16,17];
@@ -370,7 +375,11 @@ const store = {
   get(k, d) { try { const v = localStorage.getItem(k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
   set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} },
 };
-const lab = (i, fam) => (LABELS[fam || (S.T ? S.T.fam : S.fam)] || LABELS.generic)[i] ?? `Botão ${i}`;
+const ehDs5 = () => S.T ? !!S.T.ds5 : /DualSense/.test(S.model || '');
+const lab = (i, fam) => {
+  const f = fam || (S.T ? S.T.fam : S.fam);
+  return ((f === 'ps' && ehDs5() ? LABELS.ps5 : LABELS[f]) || LABELS.generic)[i] ?? `Botão ${i}`;
+};
 const stage = html => { $('#stage').innerHTML = html; };
 const hint = t => { const h = $('#hint'); if (h) h.textContent = t; };
 const grade = (v, t) => v > t.fail ? 'fail' : v > t.warn ? 'warn' : 'ok';
@@ -432,7 +441,7 @@ function buildPad(fam) {
   const F = ps ? [['✕','#7aa2ff'],['○','#ff7a7a'],['□','#f08ad0'],['△','#4fd1a5']]
        : fam === 'xbox' ? [['A','#4ade80'],['B','#f87171'],['X','#60a5fa'],['Y','#facc15']]
        : [['1','#cbd5e1'],['2','#cbd5e1'],['3','#cbd5e1'],['4','#cbd5e1']];
-  const sm = ps ? ['Share','Options','PS'] : fam === 'xbox' ? ['View','Menu','X'] : ['Select','Start','H'];
+  const sm = ps ? [/DualSense/.test(S.model || '') ? 'Create' : 'Share','Options','PS'] : fam === 'xbox' ? ['View','Menu','X'] : ['Select','Start','H'];
   const tl = ps ? ['L1','R1','L2','R2'] : fam === 'xbox' ? ['LB','RB','LT','RT'] : ['L1','R1','L2','R2'];
   let s = `<svg viewBox="0 0 600 380" role="img" aria-label="Controle">`;
   [[6,112,tl[2]],[7,392,tl[3]]].forEach(([i,x,t]) => {
@@ -613,7 +622,8 @@ function onHid(e) {
   [4,5,6,7,8,9,10,11].forEach((i, bit) => { if (b1 & (1 << bit)) cur.add(i); });
   if (b2 & 1) cur.add(16);
   if (b2 & 2) cur.add(17);
-  for (let i = 0; i < 18; i++) {
+  if (k === 'ds5' && (b2 & 4)) cur.add(18);   // Mute (microfone): o Gamepad API não expõe
+  for (let i = 0; i < 19; i++) {
     const was = hs.btn.has(i), is = cur.has(i);
     if (was === is) continue;
     if (is) { if (hs.up[i] != null && now - hs.up[i] < CFG.chatterGapMs) noteChatter('hid', i); hs.dn[i] = now; }
@@ -629,6 +639,53 @@ function noteChatter(src, i) {
 }
 // Pior contagem entre as duas fontes (Gamepad API e HID), que observam o mesmo botão.
 const chatCount = B => Math.max(B.chat.poll, B.chat.hid);
+
+// ---------- PS5: gatilhos adaptativos e luz (DualSense pelo HID, USB ou Bluetooth) ----------
+const PS5_TESTES = [['adL', 'Gatilho adaptativo L2'], ['adR', 'Gatilho adaptativo R2'], ['luz', 'Barra de luz e LEDs']];
+const podePs5 = () => !!(S.hid && S.hidKind === 'ds5' && S.hidConn);
+async function ds5Enviar(preencher) {
+  if (!podePs5()) return false;
+  const c = new Uint8Array(47); preencher(c);
+  const [id, r] = ds5Pacote(S.hidConn, c, S);
+  await S.hid.sendReport(id, r);
+  return true;
+}
+// Resistência contínua (modo 0x01: início 0, força máxima) nos dois gatilhos; desligado = modo 0x00
+function ds5Resistencia(on) {
+  return ds5Enviar(c => {
+    c[0] = 0x0c;                                           // controle dos motores do R2 (0x04) e do L2 (0x08)
+    if (on) { c[10] = 0x01; c[11] = 0x00; c[12] = 0xff; c[21] = 0x01; c[22] = 0x00; c[23] = 0xff; }
+  });
+}
+const ds5Luz = (rgb, leds) => ds5Enviar(c => {
+  c[1] = 0x15;                                             // LED do mute (0x01), barra de luz (0x04), LEDs de jogador (0x10)
+  c[8] = leds ? 1 : 0; c[43] = leds ? 0x1f : 0; c[44] = rgb[0]; c[45] = rgb[1]; c[46] = rgb[2];
+  c[38] = 0x02; c[41] = 0x02;                              // tira a barra do controle do sistema (animação de início)
+});
+async function ps5Acao(act, id) {
+  const T = S.T;
+  try {
+    if (act === 'f' && id === 'adapt') {
+      T.adapt = !T.adapt;
+      if (!(await ds5Resistencia(T.adapt))) { T.adapt = false; logEv('Gatilhos adaptativos: sensores do controle não conectados', true); }
+      else logEv(T.adapt ? 'Resistência ligada nos gatilhos — aperte L2 e R2' : 'Resistência desligada');
+      const b = $('#fadapt'); if (b) b.textContent = T.adapt ? '■ Desligar resistência' : '▶ Ligar resistência';
+    } else if (act === 'f' && id === 'luz') {
+      logEv('Luz: vermelho, verde, azul e branco, com os LEDs de jogador e do mute');
+      for (const rgb of [[255, 0, 0], [0, 255, 0], [0, 0, 255], [255, 255, 255]]) { await ds5Luz(rgb, true); await sleep(600); }
+      await ds5Luz([0, 0, 64], false);
+    } else if (act === 'fy' || act === 'fn') {
+      const def = PS5_TESTES.find(x => x[0] === id);
+      if (!def) return;
+      T.ps5[id] = act === 'fy';
+      $('#fy-' + id)?.classList.toggle('sel-ok', T.ps5[id] === true);
+      $('#fn-' + id)?.classList.toggle('sel-bad', T.ps5[id] === false);
+      logEv(`${def[1]}: ${T.ps5[id] ? 'funcionou' : 'não funcionou'}`, !T.ps5[id]);
+    }
+  } catch (e) { console.warn(e); logEv('Falha ao enviar o comando ao controle: ' + e.message, true); }
+}
+// A resistência ligada fica no controle até ser desligada: ao sair do teste, sempre desliga
+function ps5Desligar() { if (S.T && S.T.adapt) { S.T.adapt = false; ds5Resistencia(false).catch(() => {}); } }
 
 // ---------- vibração ----------
 function canRumble() { return !!currentPad()?.vibrationActuator || (S.hid && S.hidConn === 'usb'); }
@@ -929,6 +986,7 @@ async function startTest(gesture, idOverride) {
   const T = {
     id: idOverride || ($('#cid')?.value || '').trim() || autoId(), op: $('#op').value.trim(),
     model: is360Inicial() ? 'Controle Xbox 360' : S.model, x360: is360Inicial(),
+    ds5: fam === 'ps' && /DualSense/.test(S.model), ps5: {adL: null, adR: null, luz: null}, adapt: false,
     fam, start: Date.now(), t0: now, hidUsed: !!S.hid, disconnects: 0, log: [], logV: 0,
     btns: ORDER.filter(i => i < nb && (i !== 17 || fam === 'ps')),
     opt: fam === 'ps' ? [] : [16],     // botão Xbox/Home não é exposto pelo navegador
@@ -936,6 +994,7 @@ async function startTest(gesture, idOverride) {
     mo: {mn: Array(6).fill(Infinity), mx: Array(6).fill(-Infinity)}, tq: [0, 0, 0, 0], ttrail: [],
     chg: {ok: false, err: null, usbSince: null, usbNoCharge: false},
   };
+  if (T.ds5 && S.hid && S.hidKind === 'ds5') T.btns.push(18);   // Mute só pelos sensores (HID)
   for (const i of T.btns) T.b[i] = {n: 0, chat: {poll: 0, hid: 0}, cross: {}, maxHold: 0, downAt: S.prev[i] ? now : null, heldAtStart: !!S.prev[i]};
   for (const i of [6, 7]) if (i < nb) T.tr[i] = mkTrig();
   S.T = T; S.mode = 'test'; S.paused = false; S.confirm = false;
@@ -943,6 +1002,7 @@ async function startTest(gesture, idOverride) {
 }
 function autoId() { const n = store.get('ctrltest.seq', 0) + 1; store.set('ctrltest.seq', n); return 'CTRL-' + String(n).padStart(4, '0'); }
 function cancelTest() {
+  ps5Desligar();
   $('#pause').hidden = true; $('#confirm').hidden = true; S.paused = false; S.confirm = false; S.quiet = null; closeCalib();
   $('#feed').innerHTML = ''; showStart();
 }
@@ -953,7 +1013,7 @@ function stickTick(s, x, y, now) {
     const k = Math.floor((Math.atan2(y, x) + Math.PI) / (2 * Math.PI) * CFG.sectors) % CFG.sectors;
     if (r > s.sec[k]) s.sec[k] = r;
   }
-  if (r > 0.8) s.far = true;
+  if (r > 0.8) { s.far = true; s.lastFar = [x, y]; }
   s.buf.push([x, y]); if (s.buf.length > CFG.restWin) s.buf.shift();
   if (s.buf.length === CFG.restWin) {
     let mx = 0, my = 0;
@@ -964,7 +1024,7 @@ function stickTick(s, x, y, now) {
     const std = Math.sqrt(v / CFG.restWin), off = Math.hypot(mx, my);
     // repouso = analógico solto: leitura estável perto do centro
     if (std < CFG.restStd && off < 0.35) {
-      if (!s.cur) { s.cur = {off, std, t: now, dur: 0, after: s.far}; s.far = false; s.eps.push(s.cur); if (s.eps.length > 200) s.eps.shift(); }
+      if (!s.cur) { s.cur = {off, std, t: now, dur: 0, after: s.far, dir: s.far && s.lastFar ? dirDe(s.lastFar) : null}; s.far = false; s.eps.push(s.cur); if (s.eps.length > 200) s.eps.shift(); }
       s.cur.off = off; s.cur.std = std; s.cur.dur = now - s.cur.t;
     } else s.cur = null;
   }
@@ -1017,25 +1077,37 @@ function tickSession({gp, now, down, up}) {
   renderLive(gp, now);
 }
 
+// Retorno ao centro por vetor (pedido do usuário, 2026-11-26): cada soltura vale para a direção de onde o analógico
+// foi solto; horizontal (← →) e vertical (↑ ↓) têm resultado próprio, com CFG.retPorDirecao solturas em cada direção.
+const DIR_SETA = {esq: '←', dir: '→', cima: '↑', baixo: '↓'};
+const VETORES = [['horizontal', ['esq', 'dir']], ['vertical', ['cima', 'baixo']]];
+const dirDe = ([x, y]) => Math.abs(x) >= Math.abs(y) ? (x > 0 ? 'dir' : 'esq') : (y < 0 ? 'cima' : 'baixo');
+// {esq: [desvios], dir: [...], cima: [...], baixo: [...]}
+function retPorDir(s) {
+  const R = {esq: [], dir: [], cima: [], baixo: []};
+  s.eps.forEach(e => { if (e.after && e.dir && e.dur >= CFG.retMinMs) R[e.dir].push(e.off); });
+  return R;
+}
 // Cada soltura medida (levou à borda, soltou e parou ≥ retMinMs) avisa com bipe e no registro: o operador sabe que contou
 function avisarRetorno(T, s, nm) {
   const e = s.cur;
-  if (!e || !e.after || e.noted || e.dur < CFG.retMinMs) return;
+  if (!e || !e.after || !e.dir || e.noted || e.dur < CFG.retMinMs) return;
   e.noted = true;
-  const bad = e.off > retLim(T).warn;
-  logEv(`Retorno ao centro — ${nm}: ${f3(e.off)}${bad ? " (não volta ao centro)" : ""}`, bad);
-  beep(!bad, bad ? undefined : 1320);
+  const bad = e.off > retLim(T).warn, n = retPorDir(s)[e.dir].length, N = CFG.retPorDirecao;
+  logEv(`Retorno ao centro — ${nm} ${DIR_SETA[e.dir]} ${Math.min(n, N)}/${N}: ${f3(e.off)}${bad ? ' (não volta ao centro)' : ''}`, bad);
+  beep(!bad, bad ? undefined : n === N ? 1568 : 1320);
 }
-const retornos = s => s.eps.filter(e => e.after && e.dur >= CFG.retMinMs).map(e => e.off);
-// Quadro do retorno ao centro sob o analógico: pendente (piscando), "agora solte" depois de chegar na borda, medido
+// Quadro do retorno ao centro sob o analógico: contagem por direção; pisca até as 4 direções terem N solturas
 function retBox(T, s) {
-  const r = retornos(s);
-  if (r.length) {
-    const w = Math.max(...r), bad = w > retLim(T).warn;
-    return {cls: bad ? "fail" : "ok", html: `${bad ? "✕ Não volta ao centro" : "✓ Retorno ao centro"} ${f3(w)}<small>${r.length} soltura${r.length > 1 ? "s" : ""} medida${r.length > 1 ? "s" : ""}</small>`};
-  }
-  if (s.far || (s.cur && s.cur.after)) return {cls: "solte", html: "⟲ Agora SOLTE o analógico<small>e não toque nele por 1 segundo</small>"};
-  return {cls: "", html: "⟲ Falta o retorno ao centro<small>leve até a borda e SOLTE de uma vez</small>"};
+  const R = retPorDir(s), N = CFG.retPorDirecao, todos = Object.values(R).flat();
+  const pior = todos.length ? Math.max(...todos) : null, bad = pior != null && pior > retLim(T).warn;
+  const completo = Object.values(R).every(v => v.length >= N);
+  const conta = VETORES.map(([vn, ds]) => `${vn[0].toUpperCase() + vn.slice(1)}: ${ds.map(d =>
+    `<b class="${R[d].length >= N ? 'feito' : ''}">${DIR_SETA[d]} ${Math.min(R[d].length, N)}/${N}</b>`).join(' ')}`).join('<br>');
+  const cls = bad ? 'fail' : completo ? 'ok' : (s.far || (s.cur && s.cur.after && !s.cur.noted)) ? 'solte' : '';
+  const titulo = bad ? `✕ Não volta ao centro ${f3(pior)}` : completo ? `✓ Retorno ao centro (pior ${f3(pior)})`
+    : cls === 'solte' ? '⟲ Agora SOLTE o analógico' : `⟲ Retorno ao centro: ${N}x em cada direção`;
+  return {cls, html: `${titulo}<small>${conta}</small>${completo || bad ? '' : '<small>leve até a borda e SOLTE de uma vez</small>'}`};
 }
 
 function btnLiveState(i) {
@@ -1054,7 +1126,7 @@ function renderShell() {
   const T = S.T, rumbleNote = canRumble() ? '' : '<p class="mini" style="text-align:left">Vibração pode não funcionar nesta conexão — se não vibrar, marque "Não vibrou" só se tiver certeza.</p>';
   stage(`<div class="thead">
       <div><h2>Teste livre <span class="idtag">${esc(T.id)}</span></h2>
-      <p class="lead">Aperte <b>todos os botões várias vezes</b>, gire os analógicos <b>até a borda</b> e <b>solte de uma vez</b> (retorno ao centro), aperte os gatilhos <b>até o fim</b>. Tudo é registrado automaticamente.</p></div>
+      <p class="lead">Aperte <b>todos os botões várias vezes</b>, gire os analógicos <b>até a borda</b> e <b>solte de uma vez</b> (retorno ao centro, <b>${CFG.retPorDirecao}x para cada lado</b> ← → ↑ ↓), aperte os gatilhos <b>até o fim</b>. Tudo é registrado automaticamente.</p></div>
       <div class="timer" id="timer">0:00</div>
     </div>
     <div class="sec"><h3>Botões<span id="bcount"></span></h3>
@@ -1073,6 +1145,7 @@ function renderShell() {
         <button class="btn sm" id="vy-${k}" data-k="y:${k}">Vibrou</button>
         <button class="btn sm" id="vn-${k}" data-k="n:${k}">Não vibrou</button></div>`).join('')}
       ${rumbleNote}</div>
+    ${T.ds5 ? ps5Html() : ''}
     ${T.fam === 'ps' ? `<div class="sec"><h3>Sensores</h3>${T.hidUsed ? `<div class="sens">
         <div><div class="meter"><span>Giroscópio — gire o controle</span><div class="bar"><i id="mg"></i></div></div>
              <div class="meter"><span>Acelerômetro — incline o controle</span><div class="bar"><i id="ma"></i></div></div></div>
@@ -1086,6 +1159,18 @@ function renderShell() {
   S._chipKey = {}; S._logV = -1; S._calwhy = undefined; S._retL = S._retR = undefined;
   const x = $('#x360');
   if (x) x.addEventListener('change', e => { setX360(e.target.checked); e.target.blur(); });
+}
+
+// Seção do DualSense: resistência (liga/desliga), confirmação do operador para L2, R2 e luz
+function ps5Html() {
+  if (!podePs5()) return '<div class="sec"><h3>PS5: gatilhos adaptativos e luz</h3><p class="mini" style="text-align:left">Sensores não conectados — gatilhos adaptativos e luz não serão avaliados.</p></div>';
+  const linha = ([k, n]) => `<div class="vrow"><span>${n}</span>${k === 'luz' ? '<button class="btn sm" data-k="f:luz">▶ Testar luz</button>' : ''}
+      <button class="btn sm" id="fy-${k}" data-k="fy:${k}">${k === 'luz' ? 'Acendeu' : 'Sentiu resistência'}</button>
+      <button class="btn sm" id="fn-${k}" data-k="fn:${k}">${k === 'luz' ? 'Não acendeu' : 'Não sentiu'}</button></div>`;
+  return `<div class="sec"><h3>PS5: gatilhos adaptativos e luz</h3>
+    <div class="vrow"><span>Resistência</span><button class="btn sm" id="fadapt" data-k="f:adapt">▶ Ligar resistência</button><span class="mini">ligada, L2 e R2 ficam duros ao apertar</span></div>
+    ${PS5_TESTES.map(linha).join('')}
+    <p class="mini" style="text-align:left">Luz: a barra pisca vermelho, verde, azul e branco; os 5 LEDs de jogador e o LED do mute acendem juntos.</p></div>`;
 }
 
 function renderLive(gp, now) {
@@ -1187,9 +1272,17 @@ function evaluate(T, now) {
       if (sd > CFG.noiseWarn) d += `, leitura oscilando (±${f3(sd)})`;
       add('Analógicos', `Drift — ${nm}`, st, d, off);
     }
-    const rets = retornos(s);
-    if (rets.length) { const w = Math.max(...rets); add('Analógicos', `Retorno ao centro — ${nm}`, grade(w, retLim(T)), `pior desvio ${f3(w)} em ${rets.length} soltura${rets.length > 1 ? 's' : ''}`, w); }
-    else add('Analógicos', `Retorno ao centro — ${nm}`, 'miss', 'não medido — leve até a borda e solte');
+    // Um resultado por vetor; incompleto (menos de N solturas em alguma direção) fica "não testado", salvo se já reprovou
+    const R = retPorDir(s), N = CFG.retPorDirecao;
+    for (const [vn, ds] of VETORES) {
+      const nome = `Retorno ao centro — ${nm} (${vn})`, offs = ds.flatMap(d => R[d]), falta = ds.filter(d => R[d].length < N);
+      const como = `leve até a borda e solte, ${N}x para ${ds.map(d => DIR_SETA[d]).join(' e ')}`;
+      if (!offs.length) { add('Analógicos', nome, 'miss', `não medido — ${como}`); continue; }
+      const w = Math.max(...offs);
+      let st = grade(w, retLim(T)), d = `pior desvio ${f3(w)} · ${ds.map(x => `${DIR_SETA[x]} ${R[x].length}x`).join(' ')}`;
+      if (st !== 'fail' && falta.length) { st = 'miss'; d += ` — faltam ${falta.map(x => `${DIR_SETA[x]} ${N - R[x].length}x`).join(', ')} (mínimo ${N}x por direção)`; }
+      add('Analógicos', nome, st, d, w);
+    }
     const touched = s.sec.filter(v => v > CFG.sectorTouched).length;
     if (touched < CFG.sectors) add('Analógicos', `Curso — ${nm}`, 'miss', `giro incompleto (${touched}/${CFG.sectors} direções)`);
     else {
@@ -1223,6 +1316,15 @@ function evaluate(T, now) {
   else for (const [k, n] of MOTORS) {
     const v = T.rumble[k];
     add('Vibração', n, v == null ? 'miss' : v ? 'ok' : 'fail', v == null ? 'não testado' : v ? 'vibrou' : 'não vibrou');
+  }
+  // PS5: gatilhos adaptativos e luz (grupo próprio: o app de Compras não confunde com botão)
+  if (T.ds5) {
+    for (const [k, n] of PS5_TESTES) {
+      const v = T.ps5[k];
+      if (!T.hidUsed) add('PS5', n, 'na', 'sensores não conectados');
+      else add('PS5', n, v == null ? 'miss' : v ? 'ok' : 'fail',
+        v == null ? 'não testado' : v ? (k === 'luz' ? 'acendeu nas 4 cores' : 'resistência funcionando') : (k === 'luz' ? 'não acendeu' : 'sem resistência'));
+    }
   }
   // sensores (PS)
   if (T.fam === 'ps') {
@@ -1262,7 +1364,7 @@ function finalize(force) {
     S.confirm = true;
     // Retorno ao centro primeiro e em destaque: é o teste que o operador mais esquece
     const ehRet = m => m.n.startsWith('Retorno ao centro'), lista = miss.filter(ehRet).concat(miss.filter(m => !ehRet(m)));
-    const avisoRet = miss.some(ehRet) ? `<div class="retbox wide">⟲ Falta o RETORNO AO CENTRO<small>leve cada analógico até a borda e solte de uma vez — o app mede sozinho e apita</small></div>` : '';
+    const avisoRet = miss.some(ehRet) ? `<div class="retbox wide">⟲ Falta o RETORNO AO CENTRO<small>leve cada analógico até a borda e solte de uma vez, <b>${CFG.retPorDirecao}x para cada direção</b> (← → ↑ ↓) — o app mede sozinho e apita</small></div>` : '';
     $('#confirmBox').innerHTML = `<h2>Faltou testar</h2>${avisoRet}
       <p class="lead">Estes itens não foram registrados. Se você testou e não respondeu, provavelmente é defeito.</p>
       <ul class="misslist">${lista.map(m => `<li class="${ehRet(m) ? 'ret' : ''}"><b>${esc(m.n)}</b> — ${esc(m.d)}</li>`).join('')}</ul>
@@ -1273,6 +1375,7 @@ function finalize(force) {
   }
   $('#confirm').hidden = true; S.confirm = false;
   if (!T.ghost) return startQuiet();
+  ps5Desligar();
   const verdict = veredito(items);
   const rec = {
     id: T.id, ts: T.start, dur: Date.now() - T.start, op: T.op, model: T.model, fam: T.fam,
@@ -1337,6 +1440,9 @@ const MANUAIS = [
   {k: 'SINCRONIA', n: 'Não sincroniza sem fio', st: 'fail'},
   {k: 'VAZAMENTO_PILHA', n: 'Vazamento de pilha', st: 'fail'},
   {k: 'SUJEIRA', n: 'Sujeira excessiva', st: 'warn'},
+  {k: 'ALTO_FALANTE', n: 'Alto-falante não funciona', st: 'warn'},
+  {k: 'MICROFONE', n: 'Microfone não funciona', st: 'warn'},
+  {k: 'FONE_P2', n: 'Entrada de fone (P2) não funciona', st: 'warn'},
 ];
 const manDef = k => MANUAIS.find(m => m.k === k);
 // Checagem em andamento (algo marcado ou digitando "outro"): o botão A do controle não sai do laudo, só Enter/clique.
@@ -1469,16 +1575,22 @@ function benchLatest(id) {
   const v = r.err ? ['Erro de bateria', 'fail'] : benchVerdict(r.health) || ['Medida sem referência', 'na'];
   return {...r, verdict: v[0], st: v[1]};
 }
+// Relatório de saída do DualSense (47 bytes, layout do hid-playstation do Linux): USB vai direto no 0x02;
+// Bluetooth vai no 0x31 com sequência e CRC32. seqDe guarda a sequência de cada controle.
+function ds5Pacote(conn, common, seqDe) {
+  if (conn === 'usb') return [0x02, common];
+  const r = new Uint8Array(77);
+  seqDe.seq = ((seqDe.seq || 0) + 1) & 0x0f; r[0] = seqDe.seq << 4; r[1] = 0x10; r.set(common, 2);
+  putCrc(0x31, r); return [0x31, r];
+}
 async function sendLoad(c, on) {
   const v = on ? 255 : 0, d = c.d;
   if (c.kind === 'ds5') {
     const common = new Uint8Array(47);
     common[0] = 0x03; common[1] = 0x04;                    // vibração compatível + controle da barra de luz
     common[2] = v; common[3] = v; common[44] = v; common[45] = v; common[46] = v;
-    if (c.conn === 'usb') return d.sendReport(0x02, common);
-    const r = new Uint8Array(77);
-    c.seq = (c.seq + 1) & 0x0f; r[0] = c.seq << 4; r[1] = 0x10; r.set(common, 2);
-    putCrc(0x31, r); return d.sendReport(0x31, r);
+    const [id, r] = ds5Pacote(c.conn, common, c);
+    return d.sendReport(id, r);
   }
   if (c.conn === 'usb') { const r = new Uint8Array(31); r[0] = 0x07; r.fill(v, 3, 8); return d.sendReport(0x05, r); }
   const r = new Uint8Array(77); r[0] = 0xC0; r[2] = 0x07; r.fill(v, 5, 10);
@@ -1728,6 +1840,7 @@ function handleKey(k) {
   if (S.paused) return;
   if (k === 'enter') return finalize(false);
   const [act, motor] = k.split(':');
+  if (['f', 'fy', 'fn'].includes(act)) return ps5Acao(act, motor);
   const m = MOTORS.find(x => x[0] === motor);
   if (!m) return;
   if (act === 'v') { doRumble(m[2], m[3], 800); logEv(`${m[1]}: vibração enviada`); }
@@ -1771,6 +1884,7 @@ function frame(now) {
     if (now - lastInfo > 200) { lastInfo = now; updateInfo(); refreshStart(); }
     if (!gp) return;
     const pressed = gp.buttons.map(b => b.pressed || b.value > 0.5), down = new Set(), up = new Set();
+    if (S.hid && S.hidKind === 'ds5') pressed[18] = S.hs.btn.has(18);
     for (let i = 0; i < pressed.length; i++) {
       const was = !!S.prev[i];
       if (pressed[i] && !was) { down.add(i); if (S.lastUp[i] != null && now - S.lastUp[i] < CFG.chatterGapMs) noteChatter('poll', i); }
