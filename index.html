@@ -129,7 +129,7 @@ canvas{max-width:100%;height:auto;display:block;margin:0 auto}
 .misslist{margin:0 0 6px;padding-left:18px}
 .misslist li{margin:4px 0}
 .misslist li.ret{color:var(--warn);font-size:16px}
-/* Retorno ao centro: o operador costuma esquecer — fica piscando até ser medido nos dois analógicos */
+/* Drift: o operador costuma esquecer — o quadro fica piscando até ser medido nas 4 direções dos dois analógicos */
 .retbox{margin:8px auto 0;max-width:230px;padding:8px 10px;border-radius:10px;border:2px dashed var(--warn);background:rgba(245,158,11,.12);color:var(--warn);font-weight:700;font-size:14px;text-align:center;animation:retpulse 1.4s ease-in-out infinite}
 .retbox small{display:block;font-weight:500;color:var(--text);opacity:.85;font-size:12px;margin-top:2px}
 .retbox small b{font-weight:700;color:var(--warn);white-space:nowrap}
@@ -281,13 +281,13 @@ const CFG = {
   minPresses: 2,                                       // acionamentos mínimos para o botão contar como testado
   restWin: 24, restStd: 0.025,                         // repouso do analógico: ~400 ms com leitura estável
   noiseWarn: 0.012, retMinMs: 600,
-  retPorDirecao: 3,                                    // retorno ao centro: solturas mínimas em cada direção (← → ↑ ↓)
   drift: {warn: 0.08, fail: 0.08},                     // desvio do centro com o analógico solto: drift acima de 0,080 (Xbox e PS), sem faixa de alerta
   // Drift pelo método da bancada (pedido do usuário, 2026-11-26): parte do repouso, toques SUAVES e pequenos, solta e mede.
-  // A soltura vinda da borda volta ao centro rápido e mascara o drift: ela só conta para o retorno ao centro.
-  driftToque: {min: 0.12, max: 0.60, n: 4},            // toque suave = maior deslocamento entre 12% e 60%; mínimo de 4 toques medidos
-  ret: {warn: 0.08, fail: 0.08},                       // pior desvio depois de levar até a borda e soltar (mesmo limite do drift)
-  drift360: {warn: 0.20, fail: 0.20},                  // Xbox 360: limite próprio de drift e retorno ao centro (igual ao app de Compras)
+  // A soltura vinda da borda volta ao centro rápido e mascara o drift: não conta (o teste "até a borda" foi removido).
+  // Toque suave = maior deslocamento entre 12% e 60%, nas 4 direções (← → ↑ ↓), com porDirecao toques em cada uma.
+  // Parado longe do centro (≥ presoOff) por presoMs depois de um toque = não retornou ao centro (reprova).
+  driftToque: {min: 0.12, max: 0.60, porDirecao: 2, presoOff: 0.35, presoMs: 2000},
+  drift360: {warn: 0.20, fail: 0.20},                  // Xbox 360: limite próprio de drift (igual ao app de Compras)
   reach: {warn: 0.92, fail: 0.80},                     // alcance mínimo em qualquer direção
   sectors: 24, sectorOk: 0.90, sectorTouched: 0.3,
   chatterGapMs: 35, chatterPressMs: 12,                // falso contato (bounce): intervalos suspeitos
@@ -387,7 +387,6 @@ const stage = html => { $('#stage').innerHTML = html; };
 const hint = t => { const h = $('#hint'); if (h) h.textContent = t; };
 const grade = (v, t) => v > t.fail ? 'fail' : v > t.warn ? 'warn' : 'ok';
 const driftLim = T => T && T.x360 ? CFG.drift360 : CFG.drift;
-const retLim = T => T && T.x360 ? CFG.drift360 : CFG.ret;
 // Xbox 360 pelo Product ID ou pelo nome do item vindo do app de Compras; o operador ainda pode marcar no teste
 const is360Inicial = () => S.fam === 'xbox' && (S.x360 || !!(OSP && /xbox\s*360/i.test(OSP.nome || '')));
 function setX360(on) {
@@ -399,7 +398,7 @@ function setX360(on) {
 const gradeLow = (v, t) => v < t.fail ? 'fail' : v < t.warn ? 'warn' : 'ok';
 const worse = (a, b) => RANK[b] > RANK[a] ? b : a;
 let COL = {};
-function readColors() { const cs = getComputedStyle(document.documentElement); ['--ok','--warn','--line','--accent','--panel2','--muted'].forEach(v => COL[v] = cs.getPropertyValue(v).trim()); }
+function readColors() { const cs = getComputedStyle(document.documentElement); ['--ok','--warn','--bad','--line','--accent','--panel2','--muted'].forEach(v => COL[v] = cs.getPropertyValue(v).trim()); }
 
 let AC = null;
 function initAudio() { try { AC = AC || new AudioContext(); if (AC.state === 'suspended') AC.resume(); } catch (e) {} }
@@ -933,7 +932,7 @@ function calibKey(k) {
 }
 
 // ---------- canvases ----------
-function drawStick(cv, sec, trail, x, y) {
+function drawStick(cv, sec, trail, x, y, lim) {
   if (!cv) return;
   const c = cv.getContext('2d'), W = cv.width, R = W / 2 - 18, cx = W / 2, cy = W / 2, n = sec.length;
   c.clearRect(0, 0, W, W);
@@ -952,7 +951,14 @@ function drawStick(cv, sec, trail, x, y) {
   c.beginPath();
   trail.forEach(([tx, ty], k) => { const px = cx + tx * R, py = cy + ty * R; k ? c.lineTo(px, py) : c.moveTo(px, py); });
   c.strokeStyle = 'rgba(79,140,255,.5)'; c.lineWidth = 1.5; c.stroke();
-  c.beginPath(); c.arc(cx + x * R, cy + y * R, 6, 0, 2 * Math.PI); c.fillStyle = COL['--accent']; c.fill();
+  // zona permitida: dentro do círculo verde o desvio não conta como drift (0,080; Xbox 360: 0,200)
+  if (lim) {
+    const zr = Math.max(3, lim * R);
+    c.beginPath(); c.arc(cx, cy, zr, 0, 2 * Math.PI); c.fillStyle = 'rgba(34,197,94,.22)'; c.fill();
+    c.lineWidth = 1.5; c.strokeStyle = COL['--ok']; c.stroke(); c.lineWidth = 1;
+  }
+  const rr = Math.hypot(x, y), fora = lim && rr > lim && rr < CFG.driftToque.presoOff;
+  c.beginPath(); c.arc(cx + x * R, cy + y * R, 6, 0, 2 * Math.PI); c.fillStyle = fora ? COL['--bad'] : COL['--accent']; c.fill();
 }
 function drawTouch(cv, q, trail) {
   if (!cv) return;
@@ -968,7 +974,7 @@ function drawTouch(cv, q, trail) {
 }
 
 // ---------- sessão de teste livre ----------
-const mkStick = () => ({sec: Array(CFG.sectors).fill(0), buf: [], eps: [], cur: null, far: false, mov: 0, trail: []});
+const mkStick = () => ({sec: Array(CFG.sectors).fill(0), buf: [], eps: [], cur: null, far: false, mov: 0, movPos: null, trail: []});
 const mkTrig = () => ({max: 0, min: 1, lv: new Set(), n: 0, armed: false, armAt: null, spk: 0, cross: {}});
 
 function logEv(txt, bad = false) {
@@ -1017,7 +1023,7 @@ function stickTick(s, x, y, now) {
     if (r > s.sec[k]) s.sec[k] = r;
   }
   if (r > 0.8) { s.far = true; s.lastFar = [x, y]; }
-  if (r > s.mov) s.mov = r;   // maior deslocamento desde o último repouso (classifica a soltura: suave ou borda)
+  if (r > s.mov) { s.mov = r; s.movPos = [x, y]; }   // maior deslocamento desde o último repouso: classifica a soltura e dá a direção
   s.buf.push([x, y]); if (s.buf.length > CFG.restWin) s.buf.shift();
   if (s.buf.length === CFG.restWin) {
     let mx = 0, my = 0;
@@ -1027,10 +1033,12 @@ function stickTick(s, x, y, now) {
     for (const [a, b] of s.buf) v += (a - mx) ** 2 + (b - my) ** 2;
     const std = Math.sqrt(v / CFG.restWin), off = Math.hypot(mx, my);
     // repouso = analógico solto: leitura estável perto do centro
-    if (std < CFG.restStd && off < 0.35) {
+    // repouso também pode ser longe do centro: depois de um toque suave, o analógico às vezes não volta (tipo 'preso')
+    if (std < CFG.restStd) {
       if (!s.cur) {
-        const tipo = s.far ? 'borda' : s.mov >= CFG.driftToque.min && s.mov <= CFG.driftToque.max ? 'suave' : s.mov < CFG.driftToque.min ? 'repouso' : 'meio';
-        s.cur = {off, std, t: now, dur: 0, after: s.far, tipo, dir: s.far && s.lastFar ? dirDe(s.lastFar) : null}; s.far = false; s.mov = 0;
+        const D = CFG.driftToque, toque = s.mov >= D.min && s.mov <= D.max;
+        const tipo = s.far ? 'borda' : off >= D.presoOff ? (toque ? 'preso' : 'parado') : toque ? 'suave' : s.mov < D.min ? 'repouso' : 'meio';
+        s.cur = {off, std, t: now, dur: 0, tipo, dir: toque && s.movPos ? dirDe(s.movPos) : null}; s.far = false; s.mov = 0;
         s.eps.push(s.cur); if (s.eps.length > 200) s.eps.shift();
       }
       s.cur.off = off; s.cur.std = std; s.cur.dur = now - s.cur.t;
@@ -1053,7 +1061,7 @@ function tickSession({gp, now, down, up}) {
   }
   stickTick(T.st.L, gp.axes[0] || 0, gp.axes[1] || 0, now);
   stickTick(T.st.R, gp.axes[2] || 0, gp.axes[3] || 0, now);
-  for (const [k, nm] of [["L", "esquerdo"], ["R", "direito"]]) { avisarRetorno(T, T.st[k], nm); avisarToque(T, T.st[k], nm); }
+  for (const [k, nm] of [["L", "esquerdo"], ["R", "direito"]]) avisarToque(T, T.st[k], nm);
   for (const i of [6, 7]) {
     const t = T.tr[i]; if (!t) continue;
     const v = gp.buttons[i]?.value || 0;
@@ -1085,55 +1093,38 @@ function tickSession({gp, now, down, up}) {
   renderLive(gp, now);
 }
 
-// Retorno ao centro por vetor (pedido do usuário, 2026-11-26): cada soltura vale para a direção de onde o analógico
-// foi solto; horizontal (← →) e vertical (↑ ↓) têm resultado próprio, com CFG.retPorDirecao solturas em cada direção.
+// Drift pelo método da bancada (pedidos do usuário, 2026-11-26): do repouso, toques suaves e pequenos nas 4 direções,
+// solta e mede. Conta o repouso inicial, cada toque suave (parado ≥ retMinMs) e o "preso" (parado longe do centro ≥ presoMs).
 const DIR_SETA = {esq: '←', dir: '→', cima: '↑', baixo: '↓'};
-const VETORES = [['horizontal', ['esq', 'dir']], ['vertical', ['cima', 'baixo']]];
 const dirDe = ([x, y]) => Math.abs(x) >= Math.abs(y) ? (x > 0 ? 'dir' : 'esq') : (y < 0 ? 'cima' : 'baixo');
-// {esq: [desvios], dir: [...], cima: [...], baixo: [...]}
-function retPorDir(s) {
+const epMedido = e => e.tipo === 'preso' ? e.dur >= CFG.driftToque.presoMs : (e.tipo === 'repouso' || e.tipo === 'suave') && e.dur >= CFG.retMinMs;
+const driftEps = s => s.eps.filter(epMedido);
+// {esq: [desvios], dir: [...], cima: [...], baixo: [...]} dos toques medidos
+function toquesPorDir(s) {
   const R = {esq: [], dir: [], cima: [], baixo: []};
-  s.eps.forEach(e => { if (e.after && e.dir && e.dur >= CFG.retMinMs) R[e.dir].push(e.off); });
+  driftEps(s).forEach(e => { if (e.dir) R[e.dir].push(e.off); });
   return R;
 }
-// Drift: só repousos sem passar pela borda (repouso inicial e toques suaves) parados por ≥ retMinMs
-const driftEps = s => s.eps.filter(e => (e.tipo === 'repouso' || e.tipo === 'suave') && e.dur >= CFG.retMinMs);
-const toquesSuaves = s => driftEps(s).filter(e => e.tipo === 'suave');
+const presos = s => driftEps(s).filter(e => e.tipo === 'preso');
+// Cada toque medido avisa com bipe e no registro: o operador sabe que contou
 function avisarToque(T, s, nm) {
   const e = s.cur;
-  if (!e || e.tipo !== 'suave' || e.notedD || e.dur < CFG.retMinMs) return;
+  if (!e || !e.dir || e.notedD || !epMedido(e)) return;
   e.notedD = true;
-  const bad = e.off > driftLim(T).warn, n = toquesSuaves(s).length, N = CFG.driftToque.n;
-  logEv(`Drift (toque suave) — ${nm} ${Math.min(n, N)}/${N}: ${f3(e.off)}${bad ? ' (drift)' : ''}`, bad);
+  const preso = e.tipo === 'preso', bad = preso || e.off > driftLim(T).warn, n = toquesPorDir(s)[e.dir].length, N = CFG.driftToque.porDirecao;
+  logEv(`Drift — ${nm} ${DIR_SETA[e.dir]} ${Math.min(n, N)}/${N}: ${f3(e.off)}${preso ? ' (NÃO retornou ao centro)' : bad ? ' (drift)' : ''}`, bad);
   beep(!bad, bad ? undefined : n === N ? 1175 : 988);
 }
+// Quadro sob o analógico: contagem por direção; pisca até as 4 direções terem N toques
 function driftBox(T, s) {
-  const N = CFG.driftToque.n, n = toquesSuaves(s).length, offs = driftEps(s).map(e => e.off);
-  const pior = offs.length ? Math.max(...offs) : null, bad = pior != null && pior > driftLim(T).warn, ok = n >= N;
-  const cls = bad ? 'fail' : ok ? 'ok' : '';
-  const titulo = bad ? `✕ Drift ${f3(pior)}` : ok ? `✓ Drift (pior ${f3(pior)})` : `≈ Drift: toques suaves ${Math.min(n, N)}/${N}`;
-  return {cls, html: titulo + (ok || bad ? '' : '<small>do repouso, empurre <b>pouco e devagar</b> e SOLTE (sem ir à borda)</small>')};
-}
-// Cada soltura medida (levou à borda, soltou e parou ≥ retMinMs) avisa com bipe e no registro: o operador sabe que contou
-function avisarRetorno(T, s, nm) {
-  const e = s.cur;
-  if (!e || !e.after || !e.dir || e.noted || e.dur < CFG.retMinMs) return;
-  e.noted = true;
-  const bad = e.off > retLim(T).warn, n = retPorDir(s)[e.dir].length, N = CFG.retPorDirecao;
-  logEv(`Retorno ao centro — ${nm} ${DIR_SETA[e.dir]} ${Math.min(n, N)}/${N}: ${f3(e.off)}${bad ? ' (não volta ao centro)' : ''}`, bad);
-  beep(!bad, bad ? undefined : n === N ? 1568 : 1320);
-}
-// Quadro do retorno ao centro sob o analógico: contagem por direção; pisca até as 4 direções terem N solturas
-function retBox(T, s) {
-  const R = retPorDir(s), N = CFG.retPorDirecao, todos = Object.values(R).flat();
-  const pior = todos.length ? Math.max(...todos) : null, bad = pior != null && pior > retLim(T).warn;
+  const R = toquesPorDir(s), N = CFG.driftToque.porDirecao, offs = driftEps(s).map(e => e.off), pr = presos(s);
+  const pior = offs.length ? Math.max(...offs) : null, bad = pr.length > 0 || (pior != null && pior > driftLim(T).warn);
   const completo = Object.values(R).every(v => v.length >= N);
-  const conta = VETORES.map(([vn, ds]) => `${vn[0].toUpperCase() + vn.slice(1)}: ${ds.map(d =>
-    `<b class="${R[d].length >= N ? 'feito' : ''}">${DIR_SETA[d]} ${Math.min(R[d].length, N)}/${N}</b>`).join(' ')}`).join('<br>');
-  const cls = bad ? 'fail' : completo ? 'ok' : (s.far || (s.cur && s.cur.after && !s.cur.noted)) ? 'solte' : '';
-  const titulo = bad ? `✕ Não volta ao centro ${f3(pior)}` : completo ? `✓ Retorno ao centro (pior ${f3(pior)})`
-    : cls === 'solte' ? '⟲ Agora SOLTE o analógico' : `⟲ Retorno ao centro: ${N}x em cada direção`;
-  return {cls, html: `${titulo}<small>${conta}</small>${completo || bad ? '' : '<small>leve até a borda e SOLTE de uma vez</small>'}`};
+  const conta = Object.keys(DIR_SETA).map(d => `<b class="${R[d].length >= N ? 'feito' : ''}">${DIR_SETA[d]} ${Math.min(R[d].length, N)}/${N}</b>`).join(' ');
+  const cls = bad ? 'fail' : completo ? 'ok' : '';
+  const titulo = pr.length ? `✕ Não retornou ao centro (${f3(Math.max(...pr.map(e => e.off)))})` : bad ? `✕ Drift ${f3(pior)}`
+    : completo ? `✓ Drift (pior ${f3(pior)})` : `≈ Drift: toques suaves, ${N}x em cada direção`;
+  return {cls, html: `${titulo}<small>${conta}</small>${completo || bad ? '' : '<small>do repouso, empurre <b>pouco e devagar</b> e SOLTE (sem ir à borda)</small>'}`};
 }
 
 function btnLiveState(i) {
@@ -1152,14 +1143,14 @@ function renderShell() {
   const T = S.T, rumbleNote = canRumble() ? '' : '<p class="mini" style="text-align:left">Vibração pode não funcionar nesta conexão — se não vibrar, marque "Não vibrou" só se tiver certeza.</p>';
   stage(`<div class="thead">
       <div><h2>Teste livre <span class="idtag">${esc(T.id)}</span></h2>
-      <p class="lead">Aperte <b>todos os botões várias vezes</b>, no <b>drift</b>, comece com o analógico solto, dê <b>toques suaves e pequenos</b> e solte (<b>${CFG.driftToque.n}x</b>, sem ir à borda); no <b>retorno ao centro</b>, leve <b>até a borda</b> e <b>solte de uma vez</b> (<b>${CFG.retPorDirecao}x para cada lado</b> ← → ↑ ↓), aperte os gatilhos <b>até o fim</b>. Tudo é registrado automaticamente.</p></div>
+      <p class="lead">Aperte <b>todos os botões várias vezes</b>, gire os analógicos <b>até a borda</b> (curso); no <b>drift</b>, comece com o analógico solto, dê <b>toques suaves e pequenos</b> e solte, <b>${CFG.driftToque.porDirecao}x para cada lado</b> ← → ↑ ↓ (sem ir à borda), aperte os gatilhos <b>até o fim</b>. Tudo é registrado automaticamente.</p></div>
       <div class="timer" id="timer">0:00</div>
     </div>
     <div class="sec"><h3>Botões<span id="bcount"></span></h3>
       <div class="bgrid">${T.btns.map(i => `<span class="bchip" id="c${i}">${esc(lab(i))}<small id="cn${i}"></small></span>`).join('')}</div></div>
     <div class="sec two">
-      <div><h3>Analógico esquerdo</h3><canvas id="cvL" width="190" height="190"></canvas><p class="mini" id="infL"></p><div class="retbox" id="drL"></div><div class="retbox" id="retL"></div></div>
-      <div><h3>Analógico direito</h3><canvas id="cvR" width="190" height="190"></canvas><p class="mini" id="infR"></p><div class="retbox" id="drR"></div><div class="retbox" id="retR"></div></div>
+      <div><h3>Analógico esquerdo</h3><canvas id="cvL" width="190" height="190"></canvas><p class="mini" id="infL"></p><div class="retbox" id="drL"></div></div>
+      <div><h3>Analógico direito</h3><canvas id="cvR" width="190" height="190"></canvas><p class="mini" id="infR"></p><div class="retbox" id="drR"></div></div>
     </div>
     <div class="calrow"><button class="btn sm" id="calbtn" data-k="calib">Corrigir drift</button><span class="mini" id="calwhy"></span></div>
     ${T.fam === 'xbox' ? `<label class="calrow mini" style="cursor:pointer"><input type="checkbox" id="x360" ${T.x360 ? 'checked' : ''}> É um <b>Xbox 360</b> — drift só reprova acima de 0,200 (demais: 0,080)</label>` : ''}
@@ -1182,7 +1173,7 @@ function renderShell() {
       <button class="btn primary" data-k="enter">Finalizar e gerar laudo <kbd>Enter</kbd></button>
       <button class="btn" data-k="escape">Cancelar <kbd>Esc</kbd></button>
     </div>`);
-  S._chipKey = {}; S._logV = -1; S._calwhy = undefined; S._retL = S._retR = S._drL = S._drR = undefined;
+  S._chipKey = {}; S._logV = -1; S._calwhy = undefined; S._drL = S._drR = undefined;
   const x = $('#x360');
   if (x) x.addEventListener('change', e => { setX360(e.target.checked); e.target.blur(); });
 }
@@ -1212,10 +1203,8 @@ function renderLive(gp, now) {
   $('#bcount').textContent = `${done}/${T.btns.length}`;
   for (const [k, ix, iy] of [['L', 0, 1], ['R', 2, 3]]) {
     const s = T.st[k], touched = s.sec.filter(v => v > CFG.sectorTouched).length, last = s.eps[s.eps.length - 1];
-    drawStick($('#cv' + k), s.sec, s.trail, gp.axes[ix] || 0, gp.axes[iy] || 0);
+    drawStick($('#cv' + k), s.sec, s.trail, gp.axes[ix] || 0, gp.axes[iy] || 0, driftLim(T).warn);
     $('#inf' + k).textContent = `${touched}/${CFG.sectors} direções · repouso ${last ? f3(last.off) : '—'}`;
-    const rb = retBox(T, s), key = rb.cls + rb.html;
-    if (S['_ret' + k] !== key) { S['_ret' + k] = key; const el = $('#ret' + k); el.className = 'retbox ' + rb.cls; el.innerHTML = rb.html; }
     const db = driftBox(T, s), kd = db.cls + db.html;
     if (S['_dr' + k] !== kd) { S['_dr' + k] = kd; const el = $('#dr' + k); el.className = 'retbox ' + db.cls; el.innerHTML = db.html; }
   }
@@ -1292,27 +1281,20 @@ function evaluate(T, now) {
   // analógicos
   for (const [k, nm] of [['L', 'esquerdo'], ['R', 'direito']]) {
     const s = T.st[k];
-    // Drift: pior desvio entre o repouso e as solturas de toques suaves (as vindas da borda ficam de fora)
-    const de = driftEps(s), nt = toquesSuaves(s).length, NT = CFG.driftToque.n;
-    if (!de.length) add('Analógicos', `Drift — ${nm}`, 'miss', `não medido — do repouso, dê ${NT} toques suaves e pequenos e solte (sem ir à borda)`);
+    // Drift: pior desvio entre o repouso e os toques suaves nas 4 direções; "preso" (não voltou ao centro) reprova
+    const de = driftEps(s), R = toquesPorDir(s), N = CFG.driftToque.porDirecao, pr = presos(s);
+    const falta = Object.keys(R).filter(d => R[d].length < N), conta = Object.keys(R).map(x => `${DIR_SETA[x]} ${R[x].length}x`).join(' ');
+    if (!de.length) add('Analógicos', `Drift — ${nm}`, 'miss', `não medido — do repouso, dê toques suaves e pequenos e solte, ${N}x para cada lado ← → ↑ ↓ (sem ir à borda)`);
     else {
       const off = Math.max(...de.map(e => e.off)), sd = median(de.map(e => e.std));
-      let st = grade(off, driftLim(T)), d = `pior desvio ${f3(off)} solto após ${nt} toque(s) suave(s)${T.x360 ? ' (limite do Xbox 360: 0,200)' : ''}`;
-      if (st !== 'fail' && nt < NT) { st = 'miss'; d += ` — faltam ${NT - nt} toque(s) suave(s) (mínimo ${NT})`; }
+      let st = pr.length ? 'fail' : grade(off, driftLim(T));
+      let d = pr.length ? `não retorna ao centro após toque ${pr.map(e => DIR_SETA[e.dir]).join(' ')} (parou em ${f3(Math.max(...pr.map(e => e.off)))})`
+        : `pior desvio ${f3(off)} solto${T.x360 ? ' (limite do Xbox 360: 0,200)' : ''}`;
+      d += ' · ' + conta;
+      if (st !== 'fail' && falta.length) { st = 'miss'; d += ` — faltam ${falta.map(x => `${DIR_SETA[x]} ${N - R[x].length}x`).join(', ')} (mínimo ${N}x por direção)`; }
       // oscilação só informa: drift registrado é apenas o desvio acima do limite
       if (sd > CFG.noiseWarn) d += `, leitura oscilando (±${f3(sd)})`;
       add('Analógicos', `Drift — ${nm}`, st, d, off);
-    }
-    // Um resultado por vetor; incompleto (menos de N solturas em alguma direção) fica "não testado", salvo se já reprovou
-    const R = retPorDir(s), N = CFG.retPorDirecao;
-    for (const [vn, ds] of VETORES) {
-      const nome = `Retorno ao centro — ${nm} (${vn})`, offs = ds.flatMap(d => R[d]), falta = ds.filter(d => R[d].length < N);
-      const como = `leve até a borda e solte, ${N}x para ${ds.map(d => DIR_SETA[d]).join(' e ')}`;
-      if (!offs.length) { add('Analógicos', nome, 'miss', `não medido — ${como}`); continue; }
-      const w = Math.max(...offs);
-      let st = grade(w, retLim(T)), d = `pior desvio ${f3(w)} · ${ds.map(x => `${DIR_SETA[x]} ${R[x].length}x`).join(' ')}`;
-      if (st !== 'fail' && falta.length) { st = 'miss'; d += ` — faltam ${falta.map(x => `${DIR_SETA[x]} ${N - R[x].length}x`).join(', ')} (mínimo ${N}x por direção)`; }
-      add('Analógicos', nome, st, d, w);
     }
     const touched = s.sec.filter(v => v > CFG.sectorTouched).length;
     if (touched < CFG.sectors) add('Analógicos', `Curso — ${nm}`, 'miss', `giro incompleto (${touched}/${CFG.sectors} direções)`);
@@ -1393,11 +1375,10 @@ function finalize(force) {
   const miss = items.filter(i => i.st === 'miss');
   if (miss.length && !force) {
     S.confirm = true;
-    // Retorno ao centro primeiro e em destaque: é o teste que o operador mais esquece
-    const ehRet = m => m.n.startsWith('Retorno ao centro') || m.n.startsWith('Drift'), lista = miss.filter(ehRet).concat(miss.filter(m => !ehRet(m)));
-    const avisoDrift = miss.some(m => m.n.startsWith('Drift')) ? `<div class="retbox wide">≈ Falta o DRIFT<small>com o analógico solto, dê <b>${CFG.driftToque.n} toques suaves e pequenos</b> e solte — sem ir à borda; o app mede sozinho e apita</small></div>` : '';
-    const avisoRet = miss.some(m => m.n.startsWith('Retorno ao centro')) ? `<div class="retbox wide">⟲ Falta o RETORNO AO CENTRO<small>leve cada analógico até a borda e solte de uma vez, <b>${CFG.retPorDirecao}x para cada direção</b> (← → ↑ ↓) — o app mede sozinho e apita</small></div>` : '';
-    $('#confirmBox').innerHTML = `<h2>Faltou testar</h2>${avisoDrift}${avisoRet}
+    // Drift primeiro e em destaque: é o teste que o operador mais esquece
+    const ehRet = m => m.n.startsWith('Drift'), lista = miss.filter(ehRet).concat(miss.filter(m => !ehRet(m)));
+    const avisoDrift = miss.some(m => m.n.startsWith('Drift')) ? `<div class="retbox wide">≈ Falta o DRIFT<small>com o analógico solto, dê <b>toques suaves e pequenos</b> e solte, <b>${CFG.driftToque.porDirecao}x para cada direção</b> (← → ↑ ↓) — sem ir à borda; o app mede sozinho e apita</small></div>` : '';
+    $('#confirmBox').innerHTML = `<h2>Faltou testar</h2>${avisoDrift}
       <p class="lead">Estes itens não foram registrados. Se você testou e não respondeu, provavelmente é defeito.</p>
       <ul class="misslist">${lista.map(m => `<li class="${ehRet(m) ? 'ret' : ''}"><b>${esc(m.n)}</b> — ${esc(m.d)}</li>`).join('')}</ul>
       <div class="actions"><button class="btn primary" data-k="escape">Continuar testando <kbd>Esc</kbd></button>
@@ -1568,7 +1549,7 @@ function showStart() {
     <label class="field"><span>ID / código do controle</span><input id="cid" autocomplete="off" spellcheck="false" placeholder="Bipe ou digite — opcional"></label>
     <p class="hint" id="hint"></p>
     <p class="lead" style="margin:6px 0 0">Durante o teste, o app registra sozinho:</p>
-    <ul class="plan"><li>Botões que não respondem</li><li>Falso contato / clique falhando</li><li>Botão preso, acionando outro ou acionando sozinho</li><li>Drift e retorno ao centro</li><li>Curso dos analógicos e gatilhos</li><li>Vibração, bateria e sensores (PS)</li><li>Tudo que ficou sem testar</li></ul>
+    <ul class="plan"><li>Botões que não respondem</li><li>Falso contato / clique falhando</li><li>Botão preso, acionando outro ou acionando sozinho</li><li>Drift (toques suaves) e retorno ao centro depois deles</li><li>Curso dos analógicos e gatilhos</li><li>Vibração, bateria e sensores (PS)</li><li>Tudo que ficou sem testar</li></ul>
     <div class="actions"><button class="btn primary" id="go" data-k="enter">Iniciar teste <kbd>Enter</kbd></button></div>`);
   if (OSP) { $('#cid').value = OSP.codigo; if (OSP.op && !$('#op').value.trim()) $('#op').value = OSP.op; }
   setTimeout(() => $('#cid')?.focus(), 0);
