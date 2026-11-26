@@ -285,8 +285,8 @@ const CFG = {
   // Drift pelo método da bancada (pedido do usuário, 2026-11-26): parte do repouso, toques SUAVES e pequenos, solta e mede.
   // A soltura vinda da borda volta ao centro rápido e mascara o drift: não conta (o teste "até a borda" foi removido).
   // Toque suave = maior deslocamento entre 12% e 60%, nas 4 direções (← → ↑ ↓), com porDirecao toques em cada uma.
-  // Parado longe do centro (≥ presoOff) por presoMs depois de um toque = não retornou ao centro (reprova).
-  driftToque: {min: 0.12, max: 0.60, porDirecao: 2, presoOff: 0.35, presoMs: 2000},
+  // Parado longe do centro (≥ presoOff) por presoMs (1 s) depois de um toque = não retornou ao centro (reprova).
+  driftToque: {min: 0.12, max: 0.60, porDirecao: 2, presoOff: 0.35, presoMs: 1000},
   drift360: {warn: 0.20, fail: 0.20},                  // Xbox 360: limite próprio de drift (igual ao app de Compras)
   reach: {warn: 0.92, fail: 0.80},                     // alcance mínimo em qualquer direção
   sectors: 24, sectorOk: 0.90, sectorTouched: 0.3,
