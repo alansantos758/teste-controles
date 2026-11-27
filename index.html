@@ -279,8 +279,8 @@ canvas{max-width:100%;height:auto;display:block;margin:0 auto}
 // ---------- Configuração (limites de aprovação) ----------
 const CFG = {
   minPresses: 2,                                       // acionamentos mínimos para o botão contar como testado
-  restWin: 24, restStd: 0.025,                         // repouso do analógico: ~400 ms com leitura estável
-  noiseWarn: 0.012, retMinMs: 600,
+  restWin: 15, restStd: 0.025,                         // repouso do analógico: ~250 ms com leitura estável (era 400 ms, deixava o drift lento)
+  noiseWarn: 0.012, retMinMs: 350,                     // parado esse tempo depois do toque = medido (era 600 ms)
   drift: {warn: 0.08, fail: 0.08},                     // desvio do centro com o analógico solto: drift acima de 0,080 (Xbox e PS), sem faixa de alerta
   // Drift pelo método da bancada (pedido do usuário, 2026-11-26): parte do repouso, toques SUAVES e pequenos, solta e mede.
   // A soltura vinda da borda volta ao centro rápido e mascara o drift: não conta (o teste "até a borda" foi removido).
@@ -1038,10 +1038,15 @@ function stickTick(s, x, y, now) {
       if (!s.cur) {
         const D = CFG.driftToque, toque = s.mov >= D.min && s.mov <= D.max;
         const tipo = s.far ? 'borda' : off >= D.presoOff ? (toque ? 'preso' : 'parado') : toque ? 'suave' : s.mov < D.min ? 'repouso' : 'meio';
-        s.cur = {off, std, t: now, dur: 0, tipo, dir: toque && s.movPos ? dirDe(s.movPos) : null}; s.far = false; s.mov = 0;
+        s.cur = {off, std, t: now, dur: 0, tipo, mov: s.mov, dir: toque && s.movPos ? dirDe(s.movPos) : null};
         s.eps.push(s.cur); if (s.eps.length > 200) s.eps.shift();
       }
       s.cur.off = off; s.cur.std = std; s.cur.dur = now - s.cur.t;
+      // O toque só é "consumido" quando o repouso dura o bastante para medir. Se a leitura oscilar e o repouso
+      // quebrar antes disso, o próximo repouso herda o mesmo toque (antes ele virava 'repouso' e o toque se perdia).
+      if (!s.cur.consumido && s.cur.dur >= (s.cur.tipo === 'preso' ? CFG.driftToque.presoMs : CFG.retMinMs)) {
+        s.cur.consumido = true; s.far = false; s.mov = 0; s.movPos = null;
+      }
     } else s.cur = null;
   }
   s.trail.push([x, y]); if (s.trail.length > 300) s.trail.shift();
@@ -1109,6 +1114,13 @@ const presos = s => driftEps(s).filter(e => e.tipo === 'preso');
 // Cada toque medido avisa com bipe e no registro: o operador sabe que contou
 function avisarToque(T, s, nm) {
   const e = s.cur;
+  // Toque forte demais (entre o suave e a borda) não mede drift: avisa para o operador não achar que contou
+  if (e && e.tipo === 'meio' && !e.notedD && e.dur >= CFG.retMinMs) {
+    e.notedD = true;
+    logEv(`Drift — ${nm}: toque forte demais (${pct(e.mov)}) — não contou, empurre até ${pct(CFG.driftToque.max)}`);
+    beep(true, 440);
+    return;
+  }
   if (!e || !e.dir || e.notedD || !epMedido(e)) return;
   e.notedD = true;
   const preso = e.tipo === 'preso', bad = preso || e.off > driftLim(T).warn, n = toquesPorDir(s)[e.dir].length, N = CFG.driftToque.porDirecao;
