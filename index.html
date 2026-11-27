@@ -283,13 +283,17 @@ const CFG = {
   noiseWarn: 0.012, retMinMs: 350,                     // parado esse tempo depois do toque = medido (era 600 ms)
   drift: {warn: 0.08, fail: 0.08},                     // desvio do centro com o analógico solto: drift acima de 0,080 (Xbox e PS), sem faixa de alerta
   // Drift pelo método da bancada (pedido do usuário, 2026-11-26): parte do repouso, toques SUAVES e pequenos, solta e mede.
-  // A soltura vinda da borda volta ao centro rápido e mascara o drift: não conta (o teste "até a borda" foi removido).
-  // Toque suave = maior deslocamento entre 12% e 60%, nas 4 direções (← → ↑ ↓), com porDirecao toques em cada uma.
-  // Parado longe do centro (≥ presoOff) por presoMs (1 s) depois de um toque = não retornou ao centro (reprova).
-  driftToque: {min: 0.12, max: 0.60, porDirecao: 2, presoOff: 0.35, presoMs: 1000},
+  // 2026-11-27 (pedido do usuário): soltura da borda ou de perto dela também conta. Vale todo deslocamento ≥ 12%,
+  // nas 4 direções (← → ↑ ↓), com porDirecao toques em cada uma; direção = última posição antes de soltar.
+  // Parado entre presoOff e segurado (0,80) por presoMs (1 s) depois de um toque = não retornou ao centro (reprova).
+  // Parado em 0,80 ou mais = operador segurando na borda: não conta.
+  driftToque: {min: 0.12, porDirecao: 2, presoOff: 0.35, segurado: 0.80, presoMs: 1000},
   drift360: {warn: 0.20, fail: 0.20},                  // Xbox 360: limite próprio de drift (igual ao app de Compras)
   reach: {warn: 0.92, fail: 0.80},                     // alcance mínimo em qualquer direção
   sectors: 24, sectorOk: 0.90, sectorTouched: 0.3,
+  // Peça paralela (2026-11-27): o original tem curso circular (diagonal ≈ eixo); o paralelo é quase quadrado (até 1,41×).
+  // Só alerta, sem reprovar: limite estimado sem controle de referência — ajustar com os valores que o laudo mostra.
+  formato: {warn: 1.12, difOutro: 0.08},
   chatterGapMs: 35, chatterPressMs: 12,                // falso contato (bounce): intervalos suspeitos
   chatterWarn: 3,                                      // ocorrências para a dica no laudo (abaixo disso é tremor normal)
   chatterIgnore: [6, 7, 12, 13, 14, 15],               // gatilhos (analógicos) e D-pad (diagonais) dão falso positivo
@@ -370,6 +374,15 @@ const PAD = {k: [], tr: {}, st: []};
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const pct = v => Math.round(v * 100) + '%';
+const f2 = v => v == null || isNaN(v) ? '—' : v.toFixed(2).replace('.', ',');
+// Diagonal ÷ eixo no giro até a borda: ≈1,00 redondo (original), até 1,41 quadrado (paralelo). null sem giro completo.
+// Setores de 15°: os vizinhos de 45° são as diagonais; os vizinhos de 0°/90° são os eixos.
+function quadratura(s) {
+  if (!s || s.sec.some(v => v < CFG.sectorOk)) return null;
+  const meio = k => ((k + 0.5) * 360 / CFG.sectors) % 90, diag = [], eixo = [];
+  s.sec.forEach((v, k) => { const a = meio(k); if (Math.abs(a - 45) < 10) diag.push(v); else if (a < 10 || a > 80) eixo.push(v); });
+  return median(diag) / median(eixo);
+}
 const f3 = v => v == null || isNaN(v) ? '—' : v.toFixed(3).replace('.', ',');
 const mmss = ms => { const s = Math.floor(ms / 1000); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; };
 const median = a => { if (!a.length) return 0; const b = [...a].sort((x, y) => x - y); return b[b.length >> 1]; };
@@ -1036,9 +1049,10 @@ function stickTick(s, x, y, now) {
     // repouso também pode ser longe do centro: depois de um toque suave, o analógico às vezes não volta (tipo 'preso')
     if (std < CFG.restStd) {
       if (!s.cur) {
-        const D = CFG.driftToque, toque = s.mov >= D.min && s.mov <= D.max;
-        const tipo = s.far ? 'borda' : off >= D.presoOff ? (toque ? 'preso' : 'parado') : toque ? 'suave' : s.mov < D.min ? 'repouso' : 'meio';
-        s.cur = {off, std, t: now, dur: 0, tipo, mov: s.mov, dir: toque && s.movPos ? dirDe(s.movPos) : null};
+        const D = CFG.driftToque, toque = s.mov >= D.min;
+        const tipo = off >= D.presoOff ? (toque && off < D.segurado ? 'preso' : 'parado') : toque ? 'suave' : 'repouso';
+        const pos = s.far ? s.lastFar : s.movPos;   // da borda: direção de onde soltou (o giro do curso passa por todas)
+        s.cur = {off, std, t: now, dur: 0, tipo, dir: toque && pos ? dirDe(pos) : null};
         s.eps.push(s.cur); if (s.eps.length > 200) s.eps.shift();
       }
       s.cur.off = off; s.cur.std = std; s.cur.dur = now - s.cur.t;
@@ -1098,7 +1112,7 @@ function tickSession({gp, now, down, up}) {
   renderLive(gp, now);
 }
 
-// Drift pelo método da bancada (pedidos do usuário, 2026-11-26): do repouso, toques suaves e pequenos nas 4 direções,
+// Drift (pedidos do usuário, 26 e 27/11/2026): do repouso, empurra (pouco ou até a borda) nas 4 direções,
 // solta e mede. Conta o repouso inicial, cada toque suave (parado ≥ retMinMs) e o "preso" (parado longe do centro ≥ presoMs).
 const DIR_SETA = {esq: '←', dir: '→', cima: '↑', baixo: '↓'};
 const dirDe = ([x, y]) => Math.abs(x) >= Math.abs(y) ? (x > 0 ? 'dir' : 'esq') : (y < 0 ? 'cima' : 'baixo');
@@ -1114,13 +1128,6 @@ const presos = s => driftEps(s).filter(e => e.tipo === 'preso');
 // Cada toque medido avisa com bipe e no registro: o operador sabe que contou
 function avisarToque(T, s, nm) {
   const e = s.cur;
-  // Toque forte demais (entre o suave e a borda) não mede drift: avisa para o operador não achar que contou
-  if (e && e.tipo === 'meio' && !e.notedD && e.dur >= CFG.retMinMs) {
-    e.notedD = true;
-    logEv(`Drift — ${nm}: toque forte demais (${pct(e.mov)}) — não contou, empurre até ${pct(CFG.driftToque.max)}`);
-    beep(true, 440);
-    return;
-  }
   if (!e || !e.dir || e.notedD || !epMedido(e)) return;
   e.notedD = true;
   const preso = e.tipo === 'preso', bad = preso || e.off > driftLim(T).warn, n = toquesPorDir(s)[e.dir].length, N = CFG.driftToque.porDirecao;
@@ -1135,8 +1142,8 @@ function driftBox(T, s) {
   const conta = Object.keys(DIR_SETA).map(d => `<b class="${R[d].length >= N ? 'feito' : ''}">${DIR_SETA[d]} ${Math.min(R[d].length, N)}/${N}</b>`).join(' ');
   const cls = bad ? 'fail' : completo ? 'ok' : '';
   const titulo = pr.length ? `✕ Não retornou ao centro (${f3(Math.max(...pr.map(e => e.off)))})` : bad ? `✕ Drift ${f3(pior)}`
-    : completo ? `✓ Drift (pior ${f3(pior)})` : `≈ Drift: toques suaves, ${N}x em cada direção`;
-  return {cls, html: `${titulo}<small>${conta}</small>${completo || bad ? '' : '<small>do repouso, empurre <b>pouco e devagar</b> e SOLTE (sem ir à borda)</small>'}`};
+    : completo ? `✓ Drift (pior ${f3(pior)})` : `≈ Drift: empurre e solte, ${N}x em cada direção`;
+  return {cls, html: `${titulo}<small>${conta}</small>${completo || bad ? '' : '<small>do repouso, empurre (pouco ou até a borda) e SOLTE</small>'}`};
 }
 
 function btnLiveState(i) {
@@ -1155,7 +1162,7 @@ function renderShell() {
   const T = S.T, rumbleNote = canRumble() ? '' : '<p class="mini" style="text-align:left">Vibração pode não funcionar nesta conexão — se não vibrar, marque "Não vibrou" só se tiver certeza.</p>';
   stage(`<div class="thead">
       <div><h2>Teste livre <span class="idtag">${esc(T.id)}</span></h2>
-      <p class="lead">Aperte <b>todos os botões várias vezes</b>, gire os analógicos <b>até a borda</b> (curso); no <b>drift</b>, comece com o analógico solto, dê <b>toques suaves e pequenos</b> e solte, <b>${CFG.driftToque.porDirecao}x para cada lado</b> ← → ↑ ↓ (sem ir à borda), aperte os gatilhos <b>até o fim</b>. Tudo é registrado automaticamente.</p></div>
+      <p class="lead">Aperte <b>todos os botões várias vezes</b>, gire os analógicos <b>até a borda</b> (curso); no <b>drift</b>, comece com o analógico solto, empurre (pouco ou até a borda) e solte, <b>${CFG.driftToque.porDirecao}x para cada lado</b> ← → ↑ ↓, aperte os gatilhos <b>até o fim</b>. Tudo é registrado automaticamente.</p></div>
       <div class="timer" id="timer">0:00</div>
     </div>
     <div class="sec"><h3>Botões<span id="bcount"></span></h3>
@@ -1296,7 +1303,7 @@ function evaluate(T, now) {
     // Drift: pior desvio entre o repouso e os toques suaves nas 4 direções; "preso" (não voltou ao centro) reprova
     const de = driftEps(s), R = toquesPorDir(s), N = CFG.driftToque.porDirecao, pr = presos(s);
     const falta = Object.keys(R).filter(d => R[d].length < N), conta = Object.keys(R).map(x => `${DIR_SETA[x]} ${R[x].length}x`).join(' ');
-    if (!de.length) add('Analógicos', `Drift — ${nm}`, 'miss', `não medido — do repouso, dê toques suaves e pequenos e solte, ${N}x para cada lado ← → ↑ ↓ (sem ir à borda)`);
+    if (!de.length) add('Analógicos', `Drift — ${nm}`, 'miss', `não medido — do repouso, empurre e solte, ${N}x para cada lado ← → ↑ ↓`);
     else {
       const off = Math.max(...de.map(e => e.off)), sd = median(de.map(e => e.std));
       let st = pr.length ? 'fail' : grade(off, driftLim(T));
@@ -1314,6 +1321,11 @@ function evaluate(T, now) {
       let min = Infinity, wk = 0;
       s.sec.forEach((v, k2) => { if (v < min) { min = v; wk = k2; } });
       add('Analógicos', `Curso — ${nm}`, gradeLow(min, CFG.reach), min >= CFG.reach.warn ? `alcance mínimo ${pct(min)}` : `não chega na borda para ${secName(wk)} (${pct(min)})`);
+      const q = quadratura(s), outro = quadratura(T.st[k === 'L' ? 'R' : 'L']);
+      const comp = outro != null && Math.abs(q - outro) >= CFG.formato.difOutro ? ` · o outro analógico mede ${f2(outro)}` : '';
+      add('Analógicos', `Formato do curso — ${nm}`, q > CFG.formato.warn ? 'warn' : 'ok',
+          q > CFG.formato.warn ? `quase quadrado (diagonal ${f2(q)}× o eixo) — possível analógico paralelo, não original${comp}`
+                               : `circular (diagonal ${f2(q)}× o eixo)${comp}`);
     }
   }
   if (T.calib) {
@@ -1389,7 +1401,7 @@ function finalize(force) {
     S.confirm = true;
     // Drift primeiro e em destaque: é o teste que o operador mais esquece
     const ehRet = m => m.n.startsWith('Drift'), lista = miss.filter(ehRet).concat(miss.filter(m => !ehRet(m)));
-    const avisoDrift = miss.some(m => m.n.startsWith('Drift')) ? `<div class="retbox wide">≈ Falta o DRIFT<small>com o analógico solto, dê <b>toques suaves e pequenos</b> e solte, <b>${CFG.driftToque.porDirecao}x para cada direção</b> (← → ↑ ↓) — sem ir à borda; o app mede sozinho e apita</small></div>` : '';
+    const avisoDrift = miss.some(m => m.n.startsWith('Drift')) ? `<div class="retbox wide">≈ Falta o DRIFT<small>com o analógico solto, empurre (pouco ou até a borda) e solte, <b>${CFG.driftToque.porDirecao}x para cada direção</b> (← → ↑ ↓); o app mede sozinho e apita</small></div>` : '';
     $('#confirmBox').innerHTML = `<h2>Faltou testar</h2>${avisoDrift}
       <p class="lead">Estes itens não foram registrados. Se você testou e não respondeu, provavelmente é defeito.</p>
       <ul class="misslist">${lista.map(m => `<li class="${ehRet(m) ? 'ret' : ''}"><b>${esc(m.n)}</b> — ${esc(m.d)}</li>`).join('')}</ul>
@@ -1561,7 +1573,7 @@ function showStart() {
     <label class="field"><span>ID / código do controle</span><input id="cid" autocomplete="off" spellcheck="false" placeholder="Bipe ou digite — opcional"></label>
     <p class="hint" id="hint"></p>
     <p class="lead" style="margin:6px 0 0">Durante o teste, o app registra sozinho:</p>
-    <ul class="plan"><li>Botões que não respondem</li><li>Falso contato / clique falhando</li><li>Botão preso, acionando outro ou acionando sozinho</li><li>Drift (toques suaves) e retorno ao centro depois deles</li><li>Curso dos analógicos e gatilhos</li><li>Vibração, bateria e sensores (PS)</li><li>Tudo que ficou sem testar</li></ul>
+    <ul class="plan"><li>Botões que não respondem</li><li>Falso contato / clique falhando</li><li>Botão preso, acionando outro ou acionando sozinho</li><li>Drift (empurrar e soltar) e retorno ao centro</li><li>Curso e formato dos analógicos (peça paralela), gatilhos</li><li>Vibração, bateria e sensores (PS)</li><li>Tudo que ficou sem testar</li></ul>
     <div class="actions"><button class="btn primary" id="go" data-k="enter">Iniciar teste <kbd>Enter</kbd></button></div>`);
   if (OSP) { $('#cid').value = OSP.codigo; if (OSP.op && !$('#op').value.trim()) $('#op').value = OSP.op; }
   setTimeout(() => $('#cid')?.focus(), 0);
